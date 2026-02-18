@@ -17,7 +17,7 @@ A Python-based Command Line Interface (CLI) tool to manage your OVH DNS zones ef
 
 ## 📋 Prerequisites
 
-* Python 3.7 or higher.
+* Python 3.10 or higher.
 * An active OVH account with access to the domain you wish to manage.
 
 ## 🛠️ Installation

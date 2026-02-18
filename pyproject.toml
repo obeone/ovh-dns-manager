@@ -1,0 +1,22 @@
+[project]
+name = "ovh-dns-manager"
+version = "1.0.0"
+description = "A CLI tool for managing DNS entries via OVH API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Yannis Duvignau", email = "yduvignau@snapp.fr"},
+]
+
+dependencies = [
+    "ovh>=1.2.0",
+    "rich>=14.0.0",
+]
+
+[project.scripts]
+ovh-dns-manager = "main:main"
+
+[build-system]
+requires = ["setuptools>=75.0.0"]
+build-backend = "setuptools.build_meta"
