@@ -2,11 +2,12 @@
 Tests for the main module.
 
 Covers: IP validation, IPv6 detection, connection testing,
-delete filtering by record type, and specific exception handling.
+delete filtering by record type, record target validation,
+and specific exception handling.
 """
 
 import ipaddress
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 
 import ovh.exceptions
 import pytest
@@ -14,6 +15,7 @@ import pytest
 import main as main_module
 from main import (
     _test_ovh_connection,
+    _validate_record_target,
     create_ovh_client,
     setup_logging,
 )
@@ -60,6 +62,68 @@ class TestIPValidation:
             ipaddress.ip_address(ip.strip())
 
 
+# ========= Record target validation ============
+
+
+class TestValidateRecordTarget:
+    """Tests for _validate_record_target."""
+
+    def test_a_record_valid_ipv4(self):
+        valid, msg = _validate_record_target("A", "1.2.3.4")
+        assert valid is True
+
+    def test_a_record_rejects_ipv6(self):
+        valid, msg = _validate_record_target("A", "::1")
+        assert valid is False
+        assert "IPv4" in msg
+
+    def test_aaaa_record_valid_ipv6(self):
+        valid, msg = _validate_record_target("AAAA", "2001:db8::1")
+        assert valid is True
+
+    def test_aaaa_record_rejects_ipv4(self):
+        valid, msg = _validate_record_target("AAAA", "1.2.3.4")
+        assert valid is False
+        assert "IPv6" in msg
+
+    def test_cname_valid(self):
+        valid, msg = _validate_record_target("CNAME", "host.example.com.")
+        assert valid is True
+
+    def test_cname_missing_trailing_dot(self):
+        valid, msg = _validate_record_target("CNAME", "host.example.com")
+        assert valid is False
+        assert "dot" in msg.lower()
+
+    def test_mx_valid(self):
+        valid, msg = _validate_record_target("MX", "10 mail.example.com.")
+        assert valid is True
+
+    def test_mx_missing_priority(self):
+        valid, msg = _validate_record_target("MX", "mail.example.com.")
+        assert valid is False
+
+    def test_mx_invalid_priority(self):
+        valid, msg = _validate_record_target("MX", "abc mail.example.com.")
+        assert valid is False
+
+    def test_srv_valid(self):
+        valid, msg = _validate_record_target("SRV", "10 60 5060 sip.example.com.")
+        assert valid is True
+
+    def test_srv_too_few_parts(self):
+        valid, msg = _validate_record_target("SRV", "10 60 5060")
+        assert valid is False
+
+    def test_txt_any_string(self):
+        valid, msg = _validate_record_target("TXT", "v=spf1 include:example.com ~all")
+        assert valid is True
+
+    def test_empty_target(self):
+        valid, msg = _validate_record_target("A", "")
+        assert valid is False
+
+
 # ========= Connection test ============
 
 
@@ -101,82 +165,35 @@ class TestCreateOvhClient:
         assert exc_info.value.code == 1
 
 
-# ========= Delete filtering ============
+# ========= Delete with API filters ============
 
 
-class TestDeleteFiltering:
-    """
-    Tests that delete_dns_entries correctly filters by record type.
-
-    This is a regression test for the bug where ALL record types were deleted.
-    """
+class TestDeleteWithAPIFilters:
+    """Tests that delete_dns_entries uses API filters to reduce N+1 calls."""
 
     @patch("main.Confirm.ask", return_value=True)
     @patch("main.Prompt.ask")
-    def test_delete_only_a_records(self, mock_prompt, mock_confirm, mock_ovh_client, sample_dns_entries):
-        # Setup prompts: subdomains, then record type choice "1" (A only)
+    def test_delete_uses_api_filters(self, mock_prompt, mock_confirm, mock_ovh_client):
+        # Subdomains input, then record type choice "1" (A)
         mock_prompt.side_effect = ["www", "1"]
 
-        # Mock API: return all entry IDs, then individual entries
+        # API filter calls: get records with fieldType=A, subDomain=www
         mock_ovh_client.get.side_effect = [
-            [e["id"] for e in sample_dns_entries],  # list all IDs
-            sample_dns_entries[0],  # id=1 A www
-            sample_dns_entries[1],  # id=2 AAAA www
-            sample_dns_entries[2],  # id=3 CNAME mail
-            sample_dns_entries[3],  # id=4 TXT www
-            sample_dns_entries[4],  # id=5 A api
+            [1],  # filtered list returns only matching IDs
+            {"id": 1, "fieldType": "A", "subDomain": "www", "target": "1.2.3.4", "ttl": 3600},
         ]
 
         main_module.delete_dns_entries(mock_ovh_client, "example.com")
 
-        # Only the A record for "www" (id=1) should be deleted
+        # Verify API was called with filters
+        mock_ovh_client.get.assert_any_call(
+            "/domain/zone/example.com/record",
+            fieldType="A",
+            subDomain="www",
+        )
         mock_ovh_client.delete.assert_called_once_with(
             "/domain/zone/example.com/record/1"
         )
-
-    @patch("main.Confirm.ask", return_value=True)
-    @patch("main.Prompt.ask")
-    def test_delete_a_and_aaaa(self, mock_prompt, mock_confirm, mock_ovh_client, sample_dns_entries):
-        # Record type choice "3" (A + AAAA)
-        mock_prompt.side_effect = ["www", "3"]
-
-        mock_ovh_client.get.side_effect = [
-            [e["id"] for e in sample_dns_entries],
-            sample_dns_entries[0],  # id=1 A www
-            sample_dns_entries[1],  # id=2 AAAA www
-            sample_dns_entries[2],  # id=3 CNAME mail
-            sample_dns_entries[3],  # id=4 TXT www
-            sample_dns_entries[4],  # id=5 A api
-        ]
-
-        main_module.delete_dns_entries(mock_ovh_client, "example.com")
-
-        # Both A and AAAA for "www" should be deleted (ids 1 and 2)
-        assert mock_ovh_client.delete.call_count == 2
-        mock_ovh_client.delete.assert_any_call("/domain/zone/example.com/record/1")
-        mock_ovh_client.delete.assert_any_call("/domain/zone/example.com/record/2")
-
-    @patch("main.Confirm.ask", return_value=True)
-    @patch("main.Prompt.ask")
-    def test_delete_skips_other_types(self, mock_prompt, mock_confirm, mock_ovh_client, sample_dns_entries):
-        # Delete only A records for "www"
-        mock_prompt.side_effect = ["www", "1"]
-
-        mock_ovh_client.get.side_effect = [
-            [e["id"] for e in sample_dns_entries],
-            sample_dns_entries[0],
-            sample_dns_entries[1],
-            sample_dns_entries[2],
-            sample_dns_entries[3],
-            sample_dns_entries[4],
-        ]
-
-        main_module.delete_dns_entries(mock_ovh_client, "example.com")
-
-        # CNAME (id=3) and TXT (id=4) must NOT be deleted
-        deleted_paths = [c.args[0] for c in mock_ovh_client.delete.call_args_list]
-        assert "/domain/zone/example.com/record/3" not in deleted_paths
-        assert "/domain/zone/example.com/record/4" not in deleted_paths
 
 
 # ========= Setup logging ============
@@ -187,8 +204,6 @@ class TestSetupLogging:
 
     def test_default_level(self):
         setup_logging(verbose=False)
-        # No crash is sufficient; coloredlogs configures the root logger
 
     def test_verbose_level(self):
         setup_logging(verbose=True)
-        # No crash is sufficient

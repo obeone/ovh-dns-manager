@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 # ========= CONSOLE SETUP ============
 console = Console()
 
+# ========= CONSTANTS ============
+SUPPORTED_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV"]
+
 
 def setup_logging(verbose: bool = False) -> None:
     """
@@ -151,7 +154,7 @@ def display_menu() -> str:
         User's menu choice as a string
     """
     console.print("[bold cyan]📝 Menu[/bold cyan]")
-    console.print("  1. [green]Create[/green] DNS entry (A/AAAA record)")
+    console.print("  1. [green]Create[/green] DNS entry")
     console.print("  2. [blue]List[/blue] DNS entries")
     console.print("  3. [red]Delete[/red] DNS entry")
     console.print("  4. [yellow]Exit[/yellow]\n")
@@ -160,12 +163,93 @@ def display_menu() -> str:
     return choice
 
 
+def _prompt_record_type() -> str:
+    """
+    Prompt the user to select a DNS record type.
+
+    Returns:
+        Selected record type string (e.g. "A", "AAAA", "CNAME", etc.)
+    """
+    console.print("\nSelect record type:")
+    for i, rtype in enumerate(SUPPORTED_RECORD_TYPES, 1):
+        console.print(f"  {i}. [cyan]{rtype}[/cyan]")
+    console.print()
+
+    choices = [str(i) for i in range(1, len(SUPPORTED_RECORD_TYPES) + 1)]
+    type_choice = Prompt.ask("Your choice", choices=choices, default="1")
+    return SUPPORTED_RECORD_TYPES[int(type_choice) - 1]
+
+
+def _validate_record_target(record_type: str, target: str) -> tuple[bool, str]:
+    """
+    Validate the target value based on the record type.
+
+    Parameters:
+        record_type: DNS record type (A, AAAA, CNAME, TXT, MX, SRV)
+        target: The target value to validate
+
+    Returns:
+        Tuple of (is_valid, error_message). error_message is empty if valid.
+    """
+    if not target.strip():
+        return False, "Target cannot be empty"
+
+    target = target.strip()
+
+    if record_type == "A":
+        try:
+            ip_obj = ipaddress.ip_address(target)
+            if not isinstance(ip_obj, ipaddress.IPv4Address):
+                return False, "A record requires an IPv4 address, got IPv6"
+        except ValueError:
+            return False, "Invalid IPv4 address"
+
+    elif record_type == "AAAA":
+        try:
+            ip_obj = ipaddress.ip_address(target)
+            if not isinstance(ip_obj, ipaddress.IPv6Address):
+                return False, "AAAA record requires an IPv6 address, got IPv4"
+        except ValueError:
+            return False, "Invalid IPv6 address"
+
+    elif record_type == "CNAME":
+        if not target.endswith("."):
+            return False, "CNAME target must be a FQDN ending with a dot (e.g. host.example.com.)"
+
+    elif record_type == "MX":
+        parts = target.split(maxsplit=1)
+        if len(parts) != 2:
+            return False, "MX record must be 'priority target' (e.g. '10 mail.example.com.')"
+        try:
+            priority = int(parts[0])
+            if priority < 0 or priority > 65535:
+                return False, "MX priority must be between 0 and 65535"
+        except ValueError:
+            return False, "MX priority must be a number"
+
+    elif record_type == "SRV":
+        parts = target.split()
+        if len(parts) != 4:
+            return False, "SRV record must be 'priority weight port target' (e.g. '10 60 5060 sip.example.com.')"
+        try:
+            for name, val in zip(["priority", "weight", "port"], parts[:3]):
+                num = int(val)
+                if num < 0 or num > 65535:
+                    return False, f"SRV {name} must be between 0 and 65535"
+        except ValueError:
+            return False, "SRV priority, weight and port must be numbers"
+
+    # TXT: no special validation needed, any string is valid
+
+    return True, ""
+
+
 def create_dns_entries(client: ovh.Client, domain: str) -> None:
     """
-    Create DNS A or AAAA records for specified subdomains.
+    Create DNS records for specified subdomains.
 
-    Automatically detects IPv4 vs IPv6 addresses and creates the appropriate
-    record type (A for IPv4, AAAA for IPv6).
+    Supports A, AAAA, CNAME, TXT, MX, and SRV record types.
+    For A/AAAA, auto-detects the type from the IP address.
 
     Parameters:
         client: OVH API client
@@ -188,20 +272,38 @@ def create_dns_entries(client: ovh.Client, domain: str) -> None:
         logger.warning("Invalid subdomains rejected: %s", invalid)
         return
 
-    # Get target IP
-    target = Prompt.ask("Target IP address")
+    # Select record type
+    record_type = _prompt_record_type()
 
-    # Validate IP using the standard library
-    try:
-        ip_obj = ipaddress.ip_address(target.strip())
-    except ValueError:
-        console.print("[red]✗[/red] Invalid IP address format")
-        logger.warning("Invalid IP address rejected: %s", target)
-        return
+    # Auto-detect A vs AAAA if user picks one of those
+    if record_type in ("A", "AAAA"):
+        target = Prompt.ask("Target IP address")
+        try:
+            ip_obj = ipaddress.ip_address(target.strip())
+        except ValueError:
+            console.print("[red]✗[/red] Invalid IP address format")
+            logger.warning("Invalid IP address rejected: %s", target)
+            return
 
-    target = str(ip_obj)
-    record_type = "AAAA" if isinstance(ip_obj, ipaddress.IPv6Address) else "A"
-    console.print(f"[dim]Detected {record_type} record for {target}[/dim]")
+        target = str(ip_obj)
+        # Auto-correct the record type based on actual IP version
+        record_type = "AAAA" if isinstance(ip_obj, ipaddress.IPv6Address) else "A"
+        console.print(f"[dim]Detected {record_type} record for {target}[/dim]")
+    else:
+        # For other types, show type-specific hints
+        hints = {
+            "CNAME": "Target (FQDN with trailing dot) [dim]e.g. host.example.com.[/dim]",
+            "TXT": "Target text [dim]e.g. v=spf1 include:_spf.google.com ~all[/dim]",
+            "MX": "Priority and target [dim]e.g. 10 mail.example.com.[/dim]",
+            "SRV": "Priority weight port target [dim]e.g. 10 60 5060 sip.example.com.[/dim]",
+        }
+        target = Prompt.ask(hints.get(record_type, "Target value"))
+
+        is_valid, error_msg = _validate_record_target(record_type, target)
+        if not is_valid:
+            console.print(f"[red]✗[/red] {error_msg}")
+            return
+        target = target.strip()
 
     # Get TTL
     ttl_input = Prompt.ask("TTL (Time To Live in seconds)", default="3600")
@@ -210,6 +312,14 @@ def create_dns_entries(client: ovh.Client, domain: str) -> None:
     except ValueError:
         console.print("[yellow]⚠[/yellow] Invalid TTL, using default 3600")
         ttl = 3600
+
+    # For MX records, split priority from target for the API
+    api_target = target
+    mx_priority = None
+    if record_type == "MX":
+        parts = target.split(maxsplit=1)
+        mx_priority = int(parts[0])
+        api_target = parts[1]
 
     # Summary
     console.print(f"\n[dim]Creating {len(subdomains)} DNS {record_type} record(s)...[/dim]")
@@ -230,13 +340,14 @@ def create_dns_entries(client: ovh.Client, domain: str) -> None:
                     total=None
                 )
 
-                result = client.post(
-                    f"{domain_endpoint}/record",
-                    fieldType=record_type,
-                    subDomain=subdomain,
-                    target=target,
-                    ttl=ttl,
-                )
+                post_kwargs: dict = {
+                    "fieldType": record_type,
+                    "subDomain": subdomain,
+                    "target": api_target,
+                    "ttl": ttl,
+                }
+
+                result = client.post(f"{domain_endpoint}/record", **post_kwargs)
 
             record_id = result.get('id', 'N/A')
             console.print(f"[green]✓[/green] Created: [cyan]{subdomain}.{domain}[/cyan] → {target} ({record_type}, ID: {record_id})")
@@ -271,13 +382,23 @@ def create_dns_entries(client: ovh.Client, domain: str) -> None:
 
 def list_dns_entries(client: ovh.Client, domain: str) -> None:
     """
-    List all DNS entries for the domain.
+    List DNS entries for the domain, optionally filtered by record type.
+
+    Uses OVH API filters (fieldType, subDomain) to reduce the number of
+    API calls instead of fetching all records and filtering client-side.
 
     Parameters:
         client: OVH API client
         domain: Domain name
     """
     console.print("\n[bold blue]📋 DNS Entries[/bold blue]\n")
+
+    # Optional type filter
+    console.print("Filter by record type? (leave empty for all)")
+    type_filter = Prompt.ask(
+        "Record type",
+        default="",
+    ).strip().upper()
 
     domain_endpoint = f"/domain/zone/{domain}"
 
@@ -289,13 +410,18 @@ def list_dns_entries(client: ovh.Client, domain: str) -> None:
         ) as progress:
             progress.add_task(description="Fetching DNS entries...", total=None)
 
-            entry_ids = client.get(f"{domain_endpoint}/record")
+            # Use API filters to reduce N+1 calls
+            get_kwargs: dict = {}
+            if type_filter and type_filter in SUPPORTED_RECORD_TYPES:
+                get_kwargs["fieldType"] = type_filter
+
+            entry_ids = client.get(f"{domain_endpoint}/record", **get_kwargs)
 
         if not entry_ids:
             console.print("[yellow]ℹ[/yellow] No DNS entries found")
             return
 
-        logger.debug("Fetched %d entry IDs for %s", len(entry_ids), domain)
+        logger.debug("Fetched %d entry IDs for %s (filter: %s)", len(entry_ids), domain, type_filter or "none")
 
         # Create table
         table = Table(show_header=True, header_style="bold cyan")
@@ -339,8 +465,8 @@ def delete_dns_entries(client: ovh.Client, domain: str) -> None:
     """
     Delete DNS entries for specified subdomains, filtered by record type.
 
-    Asks the user which record types to delete (A, AAAA, or both) and warns
-    about other record types that exist for the same subdomain.
+    Uses OVH API filters (fieldType, subDomain) to fetch only matching
+    records, avoiding unnecessary N+1 API calls.
 
     Parameters:
         client: OVH API client
@@ -363,17 +489,26 @@ def delete_dns_entries(client: ovh.Client, domain: str) -> None:
         logger.warning("Invalid subdomains rejected: %s", invalid)
         return
 
-    # Ask which record types to delete
-    console.print("\nWhich record types to delete?")
-    console.print("  1. [cyan]A[/cyan] records only (IPv4)")
-    console.print("  2. [cyan]AAAA[/cyan] records only (IPv6)")
-    console.print("  3. [cyan]A + AAAA[/cyan] records (both)\n")
+    # Ask which record type to delete
+    console.print("\nWhich record type to delete?")
+    for i, rtype in enumerate(SUPPORTED_RECORD_TYPES, 1):
+        console.print(f"  {i}. [cyan]{rtype}[/cyan]")
+    all_idx = len(SUPPORTED_RECORD_TYPES) + 1
+    console.print(f"  {all_idx}. [cyan]All types[/cyan]\n")
 
-    type_choice = Prompt.ask("Your choice", choices=["1", "2", "3"], default="3")
-    target_types = {"1": ["A"], "2": ["AAAA"], "3": ["A", "AAAA"]}[type_choice]
+    choices = [str(i) for i in range(1, all_idx + 1)]
+    type_choice = Prompt.ask("Your choice", choices=choices, default=str(all_idx))
+    choice_idx = int(type_choice)
+
+    if choice_idx <= len(SUPPORTED_RECORD_TYPES):
+        target_types = [SUPPORTED_RECORD_TYPES[choice_idx - 1]]
+    else:
+        target_types = list(SUPPORTED_RECORD_TYPES)
+
+    type_label = "/".join(target_types) if len(target_types) <= 3 else "all"
 
     # Warning and confirmation
-    console.print(f"\n[bold red]⚠ Warning:[/bold red] You are about to delete {'/'.join(target_types)} records for:")
+    console.print(f"\n[bold red]⚠ Warning:[/bold red] You are about to delete {type_label} records for:")
     for subdomain in subdomains:
         console.print(f"  • [cyan]{subdomain}.{domain}[/cyan]")
 
@@ -387,29 +522,33 @@ def delete_dns_entries(client: ovh.Client, domain: str) -> None:
     skipped_types: set[str] = set()
 
     try:
+        # Use API filters for each subdomain + type combination to minimize calls
+        all_entries: list[tuple[int, dict]] = []
+
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
             progress.add_task(description="Fetching DNS entries...", total=None)
-            entry_ids = client.get(f"{domain_endpoint}/record")
 
-        logger.debug("Fetched %d entry IDs for deletion scan", len(entry_ids))
+            for subdomain in subdomains:
+                for rtype in target_types:
+                    entry_ids = client.get(
+                        f"{domain_endpoint}/record",
+                        fieldType=rtype,
+                        subDomain=subdomain,
+                    )
+                    for eid in entry_ids:
+                        entry = client.get(f"{domain_endpoint}/record/{eid}")
+                        all_entries.append((eid, entry))
 
-        for entry_id in entry_ids:
+        logger.debug("Found %d entries matching filters", len(all_entries))
+
+        for entry_id, entry in all_entries:
             try:
-                entry = client.get(f"{domain_endpoint}/record/{entry_id}")
-
-                if entry.get("subDomain") not in subdomains:
-                    continue
-
                 field_type = entry.get("fieldType", "")
-
-                # Skip record types not in the filter
-                if field_type not in target_types:
-                    skipped_types.add(field_type)
-                    continue
+                sub = entry.get("subDomain", "")
 
                 with Progress(
                     SpinnerColumn(),
@@ -417,18 +556,18 @@ def delete_dns_entries(client: ovh.Client, domain: str) -> None:
                     console=console
                 ) as progress:
                     progress.add_task(
-                        description=f"Deleting {entry['subDomain']}.{domain} ({field_type})",
+                        description=f"Deleting {sub}.{domain} ({field_type})",
                         total=None
                     )
                     client.delete(f"{domain_endpoint}/record/{entry_id}")
 
                 console.print(
-                    f"[green]✓[/green] Deleted: [cyan]{entry['subDomain']}.{domain}[/cyan] "
+                    f"[green]✓[/green] Deleted: [cyan]{sub}.{domain}[/cyan] "
                     f"({field_type}) → {entry.get('target', 'N/A')} (ID: {entry_id})"
                 )
                 logger.info(
                     "Deleted %s record: %s.%s (ID: %d)",
-                    field_type, entry['subDomain'], domain, entry_id,
+                    field_type, sub, domain, entry_id,
                 )
                 success_count += 1
 
@@ -442,13 +581,6 @@ def delete_dns_entries(client: ovh.Client, domain: str) -> None:
                 console.print(f"[red]✗[/red] Failed to delete entry {entry_id}: {e}")
                 logger.error("Unexpected error deleting entry %d: %s", entry_id, e, exc_info=True)
                 failed_count += 1
-
-        # Warn about other record types that were skipped
-        if skipped_types:
-            console.print(
-                f"\n[yellow]⚠[/yellow] Other record types exist for these subdomains: "
-                f"[cyan]{', '.join(sorted(skipped_types))}[/cyan] (not deleted)"
-            )
 
         # Summary
         console.print(f"\n[bold]Summary:[/bold] {success_count} deleted, {failed_count} failed")
