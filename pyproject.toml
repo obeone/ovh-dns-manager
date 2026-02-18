@@ -12,6 +12,9 @@ authors = [
 dependencies = [
     "ovh>=1.2.0",
     "rich>=14.0.0",
+    "python-dotenv>=1.0.0",
+    "coloredlogs>=15.0.0",
+    "tenacity>=9.0.0",
 ]
 
 [project.scripts]
