@@ -20,14 +20,10 @@ jobs:
           - os: ubuntu-latest
             artifact_name: OVH-DNS-Manager
             asset_name: ovh-dns-manager-linux
-          # Mac (Intel) - Pour les vieux Macs
-          - os: macos-12
+          # Mac
+          - os: macos-latest
             artifact_name: OVH-DNS-Manager
-            asset_name: ovh-dns-manager-mac-intel
-          # Mac (Apple Silicon M1/M2/M3) - NOUVEAU
-          - os: macos-14
-            artifact_name: OVH-DNS-Manager
-            asset_name: ovh-dns-manager-mac-arm64
+            asset_name: ovh-dns-manager-mac
 
     steps:
     - uses: actions/checkout@v4
