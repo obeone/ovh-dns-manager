@@ -9,6 +9,7 @@ Author: Yannis Duvignau (yduvignau@snapp.fr)
 
 # ========= IMPORTS ============
 import os
+import re
 import sys
 from pathlib import Path
 from rich.console import Console
@@ -27,6 +28,57 @@ else:
     APPLICATION_PATH = Path(__file__).parent
 
 ENV_FILE = APPLICATION_PATH / ".env"
+
+# Regex for validating domain names (RFC 1123 compliant)
+DOMAIN_REGEX = re.compile(
+    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}$"
+)
+
+# Regex for validating subdomain labels
+SUBDOMAIN_REGEX = re.compile(
+    r"^(?!-)[A-Za-z0-9-]{1,63}(?<!-)(\.[A-Za-z0-9-]{1,63})*$"
+)
+
+
+def mask_key(key):
+    """
+    Mask a sensitive key, showing only the last 4 characters.
+
+    Parameters:
+        key (str): The key to mask
+
+    Returns:
+        str: The masked key (e.g. "***abcd")
+    """
+    if len(key) <= 4:
+        return "***"
+    return "***" + key[-4:]
+
+
+def validate_domain(domain):
+    """
+    Validate a domain name against RFC 1123.
+
+    Parameters:
+        domain (str): The domain name to validate
+
+    Returns:
+        bool: True if the domain is valid
+    """
+    return bool(DOMAIN_REGEX.match(domain))
+
+
+def validate_subdomain(subdomain):
+    """
+    Validate a subdomain label.
+
+    Parameters:
+        subdomain (str): The subdomain label to validate
+
+    Returns:
+        bool: True if the subdomain is valid
+    """
+    return bool(SUBDOMAIN_REGEX.match(subdomain))
 
 
 def save_credentials():
@@ -63,10 +115,15 @@ def save_credentials():
     consumer_key = Prompt.ask("Consumer Key", password=True)
     domain = Prompt.ask("Domain to manage", default="example.com")
     
+    # Validate domain
+    if not validate_domain(domain):
+        console.print(f"[red]✗[/red] Invalid domain format: {domain}")
+        return False
+
     # Display configuration (with masked secrets)
     console.print("\n[bold green]✓[/bold green] Configuration to save:")
     console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
-    console.print(f"  • Application Key: [cyan]{application_key}[/cyan]")
+    console.print(f"  • Application Key: [cyan]{mask_key(application_key)}[/cyan]")
     console.print(f"  • Application Secret: [dim]{'*' * len(application_secret)}[/dim]")
     console.print(f"  • Consumer Key: [dim]{'*' * len(consumer_key)}[/dim]")
     console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")
@@ -184,7 +241,7 @@ def get_credentials_interactive():
         endpoint, app_key, app_secret, cons_key, domain = creds
         console.print("[bold green]✓[/bold green] Loaded credentials from [cyan].env[/cyan] file")
         console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
-        console.print(f"  • Application Key: [cyan]{app_key}[/cyan]")
+        console.print(f"  • Application Key: [cyan]{mask_key(app_key)}[/cyan]")
         console.print(f"  • Application Secret: [dim]{'*' * len(app_secret)}[/dim]")
         console.print(f"  • Consumer Key: [dim]{'*' * len(cons_key)}[/dim]")
         console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")
@@ -286,7 +343,7 @@ def main():
             endpoint, app_key, app_secret, cons_key, domain = creds
             console.print("\n[bold green]✓[/bold green] Saved credentials:")
             console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
-            console.print(f"  • Application Key: [cyan]{app_key}[/cyan]")
+            console.print(f"  • Application Key: [cyan]{mask_key(app_key)}[/cyan]")
             console.print(f"  • Application Secret: [dim]{'*' * len(app_secret)}[/dim]")
             console.print(f"  • Consumer Key: [dim]{'*' * len(cons_key)}[/dim]")
             console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")

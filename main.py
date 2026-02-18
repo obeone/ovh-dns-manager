@@ -14,7 +14,7 @@ from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich import print as rprint
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from credentials import get_credentials_interactive
+from credentials import get_credentials_interactive, validate_subdomain
 
 # ========= CONSOLE SETUP ============
 console = Console()
@@ -105,6 +105,12 @@ def create_dns_entries(client, domain):
 
     if not subdomains:
         console.print("[yellow]⚠[/yellow] No subdomains provided")
+        return
+
+    # Validate subdomain labels
+    invalid = [s for s in subdomains if not validate_subdomain(s)]
+    if invalid:
+        console.print(f"[red]✗[/red] Invalid subdomain(s): {', '.join(invalid)}")
         return
 
     # Get target IP
@@ -245,6 +251,12 @@ def delete_dns_entries(client, domain):
 
     if not subdomains:
         console.print("[yellow]⚠[/yellow] No subdomains provided")
+        return
+
+    # Validate subdomain labels
+    invalid = [s for s in subdomains if not validate_subdomain(s)]
+    if invalid:
+        console.print(f"[red]✗[/red] Invalid subdomain(s): {', '.join(invalid)}")
         return
 
     # Ask which record types to delete
