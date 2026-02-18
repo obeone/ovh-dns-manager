@@ -21,10 +21,10 @@ console = Console()
 
 # ========= CONSTANTS ============
 if getattr(sys, 'frozen', False):
-    # Si c'est un .exe, on prend le dossier où se trouve l'exe
+    # Frozen executable: use the directory containing the .exe
     APPLICATION_PATH = Path(sys.executable).parent
 else:
-    # Si c'est un script python, on prend le dossier du script
+    # Regular Python script: use the script's directory
     APPLICATION_PATH = Path(__file__).parent
 
 ENV_FILE = APPLICATION_PATH / ".env"
