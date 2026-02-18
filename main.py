@@ -5,6 +5,7 @@ Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 # ========= IMPORTS ============
+import ipaddress
 import ovh
 import sys
 from rich.console import Console
@@ -44,23 +45,25 @@ def create_ovh_client(endpoint, application_key, application_secret, consumer_ke
         ovh.Client: Configured OVH client
     """
     try:
+        client = ovh.Client(
+            endpoint=endpoint,
+            application_key=application_key,
+            application_secret=application_secret,
+            consumer_key=consumer_key,
+        )
+
+        # Actually test the connection by calling the API
         with Progress(
             SpinnerColumn(),
             TextColumn("[progress.description]{task.description}"),
             console=console
         ) as progress:
             progress.add_task(description="Connecting to OVH API...", total=None)
-            
-            client = ovh.Client(
-                endpoint=endpoint,
-                application_key=application_key,
-                application_secret=application_secret,
-                consumer_key=consumer_key,
-            )
-        
+            client.get("/auth/currentCredential")
+
         console.print("[bold green]✓[/bold green] Successfully connected to OVH API\n")
         return client
-        
+
     except Exception as e:
         console.print(f"[bold red]✗[/bold red] Failed to connect to OVH API: {str(e)}")
         sys.exit(1)
@@ -74,7 +77,7 @@ def display_menu():
         str: User's menu choice
     """
     console.print("[bold cyan]📝 Menu[/bold cyan]")
-    console.print("  1. [green]Create[/green] DNS entry (A record)")
+    console.print("  1. [green]Create[/green] DNS entry (A/AAAA record)")
     console.print("  2. [blue]List[/blue] DNS entries")
     console.print("  3. [red]Delete[/red] DNS entry")
     console.print("  4. [yellow]Exit[/yellow]\n")
@@ -85,30 +88,39 @@ def display_menu():
 
 def create_dns_entries(client, domain):
     """
-    Create DNS A records for specified subdomains.
-    
+    Create DNS A or AAAA records for specified subdomains.
+
+    Automatically detects IPv4 vs IPv6 addresses and creates the appropriate
+    record type (A for IPv4, AAAA for IPv6).
+
     Parameters:
         client (ovh.Client): OVH API client
         domain (str): Domain name
     """
     console.print("\n[bold green]➕ Create DNS Entries[/bold green]\n")
-    
+
     # Get subdomain input
     subdomains_input = Prompt.ask("Subdomains (comma separated) [dim]e.g. visio,livekit,keycloak[/dim]")
     subdomains = [s.strip() for s in subdomains_input.split(",") if s.strip()]
-    
+
     if not subdomains:
         console.print("[yellow]⚠[/yellow] No subdomains provided")
         return
-    
+
     # Get target IP
     target = Prompt.ask("Target IP address")
-    
-    # Validate IP format (basic validation)
-    if not target or target.count('.') != 3:
+
+    # Validate IP using the standard library
+    try:
+        ip_obj = ipaddress.ip_address(target.strip())
+    except ValueError:
         console.print("[red]✗[/red] Invalid IP address format")
         return
-    
+
+    target = str(ip_obj)
+    record_type = "AAAA" if isinstance(ip_obj, ipaddress.IPv6Address) else "A"
+    console.print(f"[dim]Detected {record_type} record for {target}[/dim]")
+
     # Get TTL
     ttl_input = Prompt.ask("TTL (Time To Live in seconds)", default="3600")
     try:
@@ -116,14 +128,14 @@ def create_dns_entries(client, domain):
     except ValueError:
         console.print("[yellow]⚠[/yellow] Invalid TTL, using default 3600")
         ttl = 3600
-    
+
     # Summary
-    console.print(f"\n[dim]Creating {len(subdomains)} DNS record(s)...[/dim]")
-    
+    console.print(f"\n[dim]Creating {len(subdomains)} DNS {record_type} record(s)...[/dim]")
+
     domain_endpoint = f"/domain/zone/{domain}"
     success_count = 0
     failed_count = 0
-    
+
     for subdomain in subdomains:
         try:
             with Progress(
@@ -132,28 +144,28 @@ def create_dns_entries(client, domain):
                 console=console
             ) as progress:
                 progress.add_task(
-                    description=f"Adding {subdomain}.{domain} → {target}",
+                    description=f"Adding {subdomain}.{domain} → {target} ({record_type})",
                     total=None
                 )
-                
+
                 result = client.post(
                     f"{domain_endpoint}/record",
-                    fieldType="A",
+                    fieldType=record_type,
                     subDomain=subdomain,
                     target=target,
                     ttl=ttl,
                 )
-            
-            console.print(f"[green]✓[/green] Created: [cyan]{subdomain}.{domain}[/cyan] → {target} (ID: {result.get('id', 'N/A')})")
+
+            console.print(f"[green]✓[/green] Created: [cyan]{subdomain}.{domain}[/cyan] → {target} ({record_type}, ID: {result.get('id', 'N/A')})")
             success_count += 1
-            
+
         except Exception as e:
             console.print(f"[red]✗[/red] Failed to create {subdomain}.{domain}: {str(e)}")
             failed_count += 1
-    
+
     # Summary
     console.print(f"\n[bold]Summary:[/bold] {success_count} succeeded, {failed_count} failed")
-    
+
     # Ask to refresh zone
     if success_count > 0:
         if Confirm.ask("\nRefresh DNS zone to apply changes?", default=True):
@@ -216,35 +228,48 @@ def list_dns_entries(client, domain):
 
 def delete_dns_entries(client, domain):
     """
-    Delete DNS entries for specified subdomains.
-    
+    Delete DNS entries for specified subdomains, filtered by record type.
+
+    Asks the user which record types to delete (A, AAAA, or both) and warns
+    about other record types that exist for the same subdomain.
+
     Parameters:
         client (ovh.Client): OVH API client
         domain (str): Domain name
     """
     console.print("\n[bold red]🗑️  Delete DNS Entries[/bold red]\n")
-    
+
     # Get subdomain input
     subdomains_input = Prompt.ask("Subdomains to delete (comma separated) [dim]e.g. visio,livekit,keycloak[/dim]")
     subdomains = [s.strip() for s in subdomains_input.split(",") if s.strip()]
-    
+
     if not subdomains:
         console.print("[yellow]⚠[/yellow] No subdomains provided")
         return
-    
+
+    # Ask which record types to delete
+    console.print("\nWhich record types to delete?")
+    console.print("  1. [cyan]A[/cyan] records only (IPv4)")
+    console.print("  2. [cyan]AAAA[/cyan] records only (IPv6)")
+    console.print("  3. [cyan]A + AAAA[/cyan] records (both)\n")
+
+    type_choice = Prompt.ask("Your choice", choices=["1", "2", "3"], default="3")
+    target_types = {"1": ["A"], "2": ["AAAA"], "3": ["A", "AAAA"]}[type_choice]
+
     # Warning and confirmation
-    console.print(f"\n[bold red]⚠ Warning:[/bold red] You are about to delete DNS entries for:")
+    console.print(f"\n[bold red]⚠ Warning:[/bold red] You are about to delete {'/'.join(target_types)} records for:")
     for subdomain in subdomains:
         console.print(f"  • [cyan]{subdomain}.{domain}[/cyan]")
-    
+
     if not Confirm.ask("\nAre you sure you want to proceed?", default=False):
         console.print("[yellow]ℹ[/yellow] Operation cancelled")
         return
-    
+
     domain_endpoint = f"/domain/zone/{domain}"
     success_count = 0
     failed_count = 0
-    
+    skipped_types = set()
+
     try:
         with Progress(
             SpinnerColumn(),
@@ -253,41 +278,57 @@ def delete_dns_entries(client, domain):
         ) as progress:
             progress.add_task(description="Fetching DNS entries...", total=None)
             entry_ids = client.get(f"{domain_endpoint}/record")
-        
+
         for entry_id in entry_ids:
             try:
                 entry = client.get(f"{domain_endpoint}/record/{entry_id}")
-                
-                if entry.get("subDomain") in subdomains:
-                    with Progress(
-                        SpinnerColumn(),
-                        TextColumn("[progress.description]{task.description}"),
-                        console=console
-                    ) as progress:
-                        progress.add_task(
-                            description=f"Deleting {entry['subDomain']}.{domain}",
-                            total=None
-                        )
-                        client.delete(f"{domain_endpoint}/record/{entry_id}")
-                    
-                    console.print(
-                        f"[green]✓[/green] Deleted: [cyan]{entry['subDomain']}.{domain}[/cyan] "
-                        f"→ {entry.get('target', 'N/A')} (ID: {entry_id})"
+
+                if entry.get("subDomain") not in subdomains:
+                    continue
+
+                field_type = entry.get("fieldType", "")
+
+                # Skip record types not in the filter
+                if field_type not in target_types:
+                    skipped_types.add(field_type)
+                    continue
+
+                with Progress(
+                    SpinnerColumn(),
+                    TextColumn("[progress.description]{task.description}"),
+                    console=console
+                ) as progress:
+                    progress.add_task(
+                        description=f"Deleting {entry['subDomain']}.{domain} ({field_type})",
+                        total=None
                     )
-                    success_count += 1
-                    
+                    client.delete(f"{domain_endpoint}/record/{entry_id}")
+
+                console.print(
+                    f"[green]✓[/green] Deleted: [cyan]{entry['subDomain']}.{domain}[/cyan] "
+                    f"({field_type}) → {entry.get('target', 'N/A')} (ID: {entry_id})"
+                )
+                success_count += 1
+
             except Exception as e:
                 console.print(f"[red]✗[/red] Failed to delete entry {entry_id}: {str(e)}")
                 failed_count += 1
-        
+
+        # Warn about other record types that were skipped
+        if skipped_types:
+            console.print(
+                f"\n[yellow]⚠[/yellow] Other record types exist for these subdomains: "
+                f"[cyan]{', '.join(sorted(skipped_types))}[/cyan] (not deleted)"
+            )
+
         # Summary
         console.print(f"\n[bold]Summary:[/bold] {success_count} deleted, {failed_count} failed")
-        
+
         # Ask to refresh zone
         if success_count > 0:
             if Confirm.ask("\nRefresh DNS zone to apply changes?", default=True):
                 refresh_zone(client, domain)
-        
+
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to delete DNS entries: {str(e)}")
 

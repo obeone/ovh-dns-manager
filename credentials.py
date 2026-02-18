@@ -207,7 +207,8 @@ def get_credentials_interactive():
                 return creds
         # If save failed, fall through to manual entry
         console.print("\n[yellow]⚠[/yellow] Falling back to manual entry\n")
-    
+        choice = "2"
+
     if choice == "2":
         # Manual entry without saving
         console.print("\n[bold yellow]📋 API Configuration[/bold yellow]")
