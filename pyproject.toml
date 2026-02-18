@@ -1,12 +1,25 @@
 [project]
 name = "ovh-dns-manager"
-version = "1.0.0"
+dynamic = ["version"]
 description = "A CLI tool for managing DNS entries via OVH API"
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [
     {name = "Yannis Duvignau", email = "yduvignau@snapp.fr"},
+]
+keywords = ["ovh", "dns", "cli", "manager"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: System Administrators",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Internet :: Name Service (DNS)",
 ]
 
 dependencies = [
@@ -18,7 +31,13 @@ dependencies = [
 ]
 
 [project.scripts]
-ovh-dns-manager = "main:main"
+ovh-dns-manager = "ovh_dns_manager.cli:main"
+ovh-dns-credentials = "ovh_dns_manager.credentials:main"
+
+[project.urls]
+Homepage = "https://github.com/obeone/ovh-dns-manager"
+Repository = "https://github.com/obeone/ovh-dns-manager"
+Issues = "https://github.com/obeone/ovh-dns-manager/issues"
 
 [project.optional-dependencies]
 dev = [
@@ -26,9 +45,14 @@ dev = [
     "pytest-cov>=7.0.0",
 ]
 
+[tool.setuptools.dynamic]
+version = {attr = "ovh_dns_manager.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["ovh_dns_manager*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
 
 [build-system]
 requires = ["setuptools>=75.0.0"]
