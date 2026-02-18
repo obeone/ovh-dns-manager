@@ -1,8 +1,7 @@
 """
 Tests for the credentials module.
 
-Covers: load/save, domain/subdomain validation, key masking,
-OvhCredentials NamedTuple, and the fallthrough bug fix.
+Covers: load/save, OvhCredentials NamedTuple, and the fallthrough bug fix.
 """
 
 from pathlib import Path
@@ -10,92 +9,10 @@ from unittest.mock import patch
 
 import pytest
 
-from credentials import (
+from ovh_dns_manager.credentials import (
     OvhCredentials,
     load_credentials,
-    mask_key,
-    validate_domain,
-    validate_subdomain,
 )
-
-
-# ========= mask_key ============
-
-
-class TestMaskKey:
-    """Tests for the mask_key helper."""
-
-    def test_long_key(self):
-        assert mask_key("abcdefgh1234") == "***1234"
-
-    def test_exactly_five_chars(self):
-        assert mask_key("abcde") == "***bcde"
-
-    def test_four_chars(self):
-        assert mask_key("abcd") == "***"
-
-    def test_short_key(self):
-        assert mask_key("ab") == "***"
-
-    def test_empty_key(self):
-        assert mask_key("") == "***"
-
-
-# ========= validate_domain ============
-
-
-class TestValidateDomain:
-    """Tests for domain validation."""
-
-    @pytest.mark.parametrize("domain", [
-        "example.com",
-        "sub.example.com",
-        "my-domain.co.uk",
-        "a.io",
-        "test-123.example.org",
-    ])
-    def test_valid_domains(self, domain):
-        assert validate_domain(domain) is True
-
-    @pytest.mark.parametrize("domain", [
-        "",
-        "localhost",
-        "-bad.com",
-        "bad-.com",
-        "no spaces.com",
-        ".leading-dot.com",
-        "a" * 64 + ".com",  # label too long
-    ])
-    def test_invalid_domains(self, domain):
-        assert validate_domain(domain) is False
-
-
-# ========= validate_subdomain ============
-
-
-class TestValidateSubdomain:
-    """Tests for subdomain validation."""
-
-    @pytest.mark.parametrize("subdomain", [
-        "www",
-        "api",
-        "my-app",
-        "sub.domain",
-        "a",
-        "test-123",
-    ])
-    def test_valid_subdomains(self, subdomain):
-        assert validate_subdomain(subdomain) is True
-
-    @pytest.mark.parametrize("subdomain", [
-        "",
-        "-invalid",
-        "invalid-",
-        "has space",
-        "a" * 64,  # label too long
-    ])
-    def test_invalid_subdomains(self, subdomain):
-        assert validate_subdomain(subdomain) is False
 
 
 # ========= OvhCredentials ============
@@ -129,7 +46,7 @@ class TestLoadCredentials:
     """Tests for loading credentials from .env file."""
 
     def test_load_valid_env(self, tmp_env_file):
-        with patch("credentials.ENV_FILE", tmp_env_file):
+        with patch("ovh_dns_manager.credentials.ENV_FILE", tmp_env_file):
             creds = load_credentials()
 
         assert creds is not None
@@ -140,19 +57,19 @@ class TestLoadCredentials:
 
     def test_load_missing_file(self, tmp_path):
         missing = tmp_path / "nonexistent.env"
-        with patch("credentials.ENV_FILE", missing):
+        with patch("ovh_dns_manager.credentials.ENV_FILE", missing):
             assert load_credentials() is None
 
     def test_load_incomplete_env(self, tmp_path):
         env_file = tmp_path / ".env"
         env_file.write_text("OVH_ENDPOINT=ovh-eu\n")  # Missing other fields
-        with patch("credentials.ENV_FILE", env_file):
+        with patch("ovh_dns_manager.credentials.ENV_FILE", env_file):
             assert load_credentials() is None
 
     def test_load_empty_file(self, tmp_path):
         env_file = tmp_path / ".env"
         env_file.write_text("")
-        with patch("credentials.ENV_FILE", env_file):
+        with patch("ovh_dns_manager.credentials.ENV_FILE", env_file):
             assert load_credentials() is None
 
     def test_load_with_comments(self, tmp_path):
@@ -166,7 +83,7 @@ class TestLoadCredentials:
             "# Another comment\n"
             "OVH_DOMAIN=example.com\n"
         )
-        with patch("credentials.ENV_FILE", env_file):
+        with patch("ovh_dns_manager.credentials.ENV_FILE", env_file):
             creds = load_credentials()
         assert creds is not None
         assert creds.endpoint == "ovh-eu"
@@ -183,9 +100,9 @@ class TestCredentialsFallthrough:
     instead of 'elif', causing the fallthrough to be skipped.
     """
 
-    @patch("credentials.Prompt.ask")
-    @patch("credentials.save_credentials", return_value=False)
-    @patch("credentials.load_credentials", return_value=None)
+    @patch("ovh_dns_manager.credentials.Prompt.ask")
+    @patch("ovh_dns_manager.credentials.save_credentials", return_value=False)
+    @patch("ovh_dns_manager.credentials.load_credentials", return_value=None)
     def test_fallthrough_after_save_failure(
         self, mock_load, mock_save, mock_prompt
     ):
@@ -200,8 +117,8 @@ class TestCredentialsFallthrough:
             "test.com", # Domain
         ]
 
-        with patch("credentials.Confirm"):
-            from credentials import get_credentials_interactive
+        with patch("ovh_dns_manager.credentials.Confirm"):
+            from ovh_dns_manager.credentials import get_credentials_interactive
             creds = get_credentials_interactive()
 
         assert creds is not None
