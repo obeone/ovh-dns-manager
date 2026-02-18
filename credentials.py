@@ -19,7 +19,14 @@ from rich.panel import Panel
 console = Console()
 
 # ========= CONSTANTS ============
-ENV_FILE = Path(__file__).parent / ".env"
+if getattr(sys, 'frozen', False):
+    # Si c'est un .exe, on prend le dossier où se trouve l'exe
+    APPLICATION_PATH = Path(sys.executable).parent
+else:
+    # Si c'est un script python, on prend le dossier du script
+    APPLICATION_PATH = Path(__file__).parent
+
+ENV_FILE = APPLICATION_PATH / ".env"
 
 
 def save_credentials():
