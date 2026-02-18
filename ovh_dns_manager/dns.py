@@ -1,166 +1,26 @@
 """
-OVH DNS Manager - A CLI tool for managing DNS entries via OVH API.
+DNS record operations for the OVH DNS Manager.
 
-Author: Yannis Duvignau (yduvignau@snapp.fr)
+Provides functions to create, list, delete DNS records and refresh
+DNS zones through the OVH API.
 """
 
-# ========= IMPORTS ============
-import argparse
 import ipaddress
 import logging
-import sys
 
-import coloredlogs
 import ovh
 import ovh.exceptions
 from rich.console import Console
 from rich.table import Table
-from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
 
-from credentials import OvhCredentials, get_credentials_interactive, validate_subdomain
+from ovh_dns_manager.constants import SUPPORTED_RECORD_TYPES
+from ovh_dns_manager.validation import validate_subdomain, validate_record_target
 
-# ========= LOGGING ============
 logger = logging.getLogger(__name__)
 
-# ========= CONSOLE SETUP ============
 console = Console()
-
-# ========= CONSTANTS ============
-SUPPORTED_RECORD_TYPES = ["A", "AAAA", "CNAME", "TXT", "MX", "SRV"]
-
-
-def setup_logging(verbose: bool = False) -> None:
-    """
-    Configure logging with coloredlogs.
-
-    Parameters:
-        verbose: If True, set log level to DEBUG; otherwise INFO
-    """
-    level = "DEBUG" if verbose else "INFO"
-    coloredlogs.install(
-        level=level,
-        fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        logger=logging.getLogger(),
-    )
-    logger.debug("Logging configured at %s level", level)
-
-
-def print_header() -> None:
-    """Display the application header."""
-    console.print(Panel.fit(
-        "[bold cyan]OVH DNS Manager[/bold cyan]\n"
-        "[dim]Manage your DNS entries easily[/dim]",
-        border_style="cyan"
-    ))
-
-
-@retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=2, max=10),
-    retry=retry_if_exception_type((
-        ovh.exceptions.NetworkError,
-        ConnectionError,
-    )),
-    reraise=True,
-)
-def _test_ovh_connection(client: ovh.Client) -> dict:
-    """
-    Test OVH API connectivity by fetching current credentials.
-
-    Retries up to 3 times with exponential backoff on network errors.
-
-    Parameters:
-        client: OVH API client instance
-
-    Returns:
-        API response dict from /auth/currentCredential
-
-    Raises:
-        ovh.exceptions.NetworkError: On persistent network failures
-        ovh.exceptions.InvalidCredential: On invalid API credentials
-    """
-    return client.get("/auth/currentCredential")
-
-
-def create_ovh_client(
-    endpoint: str,
-    application_key: str,
-    application_secret: str,
-    consumer_key: str,
-) -> ovh.Client:
-    """
-    Create and test OVH API client with retry logic.
-
-    Parameters:
-        endpoint: OVH API endpoint
-        application_key: Application key
-        application_secret: Application secret
-        consumer_key: Consumer key
-
-    Returns:
-        Configured and tested OVH client
-    """
-    try:
-        client = ovh.Client(
-            endpoint=endpoint,
-            application_key=application_key,
-            application_secret=application_secret,
-            consumer_key=consumer_key,
-        )
-        logger.debug("OVH client instantiated for endpoint %s", endpoint)
-
-        # Actually test the connection by calling the API
-        with Progress(
-            SpinnerColumn(),
-            TextColumn("[progress.description]{task.description}"),
-            console=console
-        ) as progress:
-            progress.add_task(description="Connecting to OVH API...", total=None)
-            result = _test_ovh_connection(client)
-
-        console.print("[bold green]✓[/bold green] Successfully connected to OVH API\n")
-        logger.info(
-            "Connected to OVH API (credential ID: %s)",
-            result.get("credentialId", "unknown"),
-        )
-        return client
-
-    except ovh.exceptions.InvalidCredential as e:
-        console.print(f"[bold red]✗[/bold red] Invalid API credentials: {e}")
-        logger.critical("Invalid OVH credentials: %s", e)
-        sys.exit(1)
-    except ovh.exceptions.NetworkError as e:
-        console.print(f"[bold red]✗[/bold red] Network error connecting to OVH API: {e}")
-        logger.critical("Network error after retries: %s", e, exc_info=True)
-        sys.exit(1)
-    except ovh.exceptions.APIError as e:
-        console.print(f"[bold red]✗[/bold red] OVH API error: {e}")
-        logger.critical("OVH API error: %s", e, exc_info=True)
-        sys.exit(1)
-    except Exception as e:
-        console.print(f"[bold red]✗[/bold red] Failed to connect to OVH API: {e}")
-        logger.critical("Unexpected error connecting to OVH: %s", e, exc_info=True)
-        sys.exit(1)
-
-
-def display_menu() -> str:
-    """
-    Display the main menu and get user choice.
-
-    Returns:
-        User's menu choice as a string
-    """
-    console.print("[bold cyan]📝 Menu[/bold cyan]")
-    console.print("  1. [green]Create[/green] DNS entry")
-    console.print("  2. [blue]List[/blue] DNS entries")
-    console.print("  3. [red]Delete[/red] DNS entry")
-    console.print("  4. [yellow]Exit[/yellow]\n")
-
-    choice = Prompt.ask("Your choice", choices=["1", "2", "3", "4"])
-    return choice
 
 
 def _prompt_record_type() -> str:
@@ -178,70 +38,6 @@ def _prompt_record_type() -> str:
     choices = [str(i) for i in range(1, len(SUPPORTED_RECORD_TYPES) + 1)]
     type_choice = Prompt.ask("Your choice", choices=choices, default="1")
     return SUPPORTED_RECORD_TYPES[int(type_choice) - 1]
-
-
-def _validate_record_target(record_type: str, target: str) -> tuple[bool, str]:
-    """
-    Validate the target value based on the record type.
-
-    Parameters:
-        record_type: DNS record type (A, AAAA, CNAME, TXT, MX, SRV)
-        target: The target value to validate
-
-    Returns:
-        Tuple of (is_valid, error_message). error_message is empty if valid.
-    """
-    if not target.strip():
-        return False, "Target cannot be empty"
-
-    target = target.strip()
-
-    if record_type == "A":
-        try:
-            ip_obj = ipaddress.ip_address(target)
-            if not isinstance(ip_obj, ipaddress.IPv4Address):
-                return False, "A record requires an IPv4 address, got IPv6"
-        except ValueError:
-            return False, "Invalid IPv4 address"
-
-    elif record_type == "AAAA":
-        try:
-            ip_obj = ipaddress.ip_address(target)
-            if not isinstance(ip_obj, ipaddress.IPv6Address):
-                return False, "AAAA record requires an IPv6 address, got IPv4"
-        except ValueError:
-            return False, "Invalid IPv6 address"
-
-    elif record_type == "CNAME":
-        if not target.endswith("."):
-            return False, "CNAME target must be a FQDN ending with a dot (e.g. host.example.com.)"
-
-    elif record_type == "MX":
-        parts = target.split(maxsplit=1)
-        if len(parts) != 2:
-            return False, "MX record must be 'priority target' (e.g. '10 mail.example.com.')"
-        try:
-            priority = int(parts[0])
-            if priority < 0 or priority > 65535:
-                return False, "MX priority must be between 0 and 65535"
-        except ValueError:
-            return False, "MX priority must be a number"
-
-    elif record_type == "SRV":
-        parts = target.split()
-        if len(parts) != 4:
-            return False, "SRV record must be 'priority weight port target' (e.g. '10 60 5060 sip.example.com.')"
-        try:
-            for name, val in zip(["priority", "weight", "port"], parts[:3]):
-                num = int(val)
-                if num < 0 or num > 65535:
-                    return False, f"SRV {name} must be between 0 and 65535"
-        except ValueError:
-            return False, "SRV priority, weight and port must be numbers"
-
-    # TXT: no special validation needed, any string is valid
-
-    return True, ""
 
 
 def create_dns_entries(client: ovh.Client, domain: str) -> None:
@@ -299,7 +95,7 @@ def create_dns_entries(client: ovh.Client, domain: str) -> None:
         }
         target = Prompt.ask(hints.get(record_type, "Target value"))
 
-        is_valid, error_msg = _validate_record_target(record_type, target)
+        is_valid, error_msg = validate_record_target(record_type, target)
         if not is_valid:
             console.print(f"[red]✗[/red] {error_msg}")
             return
@@ -627,77 +423,3 @@ def refresh_zone(client: ovh.Client, domain: str) -> None:
     except Exception as e:
         console.print(f"[red]✗[/red] Failed to refresh zone: {e}")
         logger.error("Unexpected error refreshing zone: %s", e, exc_info=True)
-
-
-def parse_args() -> argparse.Namespace:
-    """
-    Parse command-line arguments.
-
-    Returns:
-        Parsed arguments namespace
-    """
-    parser = argparse.ArgumentParser(
-        description="OVH DNS Manager - Manage DNS entries via OVH API",
-    )
-    parser.add_argument(
-        "-v", "--verbose",
-        action="store_true",
-        help="Enable verbose (DEBUG) logging output",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    """Main application entry point."""
-    args = parse_args()
-    setup_logging(verbose=args.verbose)
-
-    logger.debug("Application starting")
-    print_header()
-
-    # Get credentials (from .env or prompt)
-    creds = get_credentials_interactive()
-    logger.debug("Credentials obtained for domain %s", creds.domain)
-
-    # Create client
-    client = create_ovh_client(
-        creds.endpoint,
-        creds.application_key,
-        creds.application_secret,
-        creds.consumer_key,
-    )
-
-    # Main loop
-    while True:
-        try:
-            choice = display_menu()
-
-            if choice == "1":
-                create_dns_entries(client, creds.domain)
-            elif choice == "2":
-                list_dns_entries(client, creds.domain)
-            elif choice == "3":
-                delete_dns_entries(client, creds.domain)
-            elif choice == "4":
-                console.print("\n[bold cyan]👋 Goodbye![/bold cyan]\n")
-                logger.info("User exited normally")
-                sys.exit(0)
-
-            # Separator before next action
-            console.print("\n" + "─" * 60 + "\n")
-
-        except KeyboardInterrupt:
-            console.print("\n\n[yellow]⚠[/yellow] Operation cancelled by user")
-            if Confirm.ask("\nDo you want to exit?", default=True):
-                console.print("\n[bold cyan]👋 Goodbye![/bold cyan]\n")
-                logger.info("User exited via keyboard interrupt")
-                sys.exit(0)
-        except Exception as e:
-            console.print(f"\n[red]✗[/red] Unexpected error: {e}")
-            logger.error("Unhandled error in main loop: %s", e, exc_info=True)
-            if not Confirm.ask("\nContinue?", default=True):
-                sys.exit(1)
-
-
-if __name__ == "__main__":
-    main()

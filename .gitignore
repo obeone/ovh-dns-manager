@@ -30,3 +30,7 @@ dist/
 .DS_Store
 # Windows thumbnail cache
 Thumbs.db
+# Git worktrees
+worktrees/
+# Setuptools egg info
+*.egg-info/
