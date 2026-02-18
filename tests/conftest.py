@@ -2,14 +2,9 @@
 Shared pytest fixtures for OVH DNS Manager tests.
 """
 
-import sys
-from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
-
-# Add project root to path so we can import modules
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 
 @pytest.fixture
