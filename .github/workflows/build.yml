@@ -12,15 +12,22 @@ jobs:
     strategy:
       matrix:
         include:
+          # Windows
           - os: windows-latest
             artifact_name: OVH-DNS-Manager.exe
             asset_name: ovh-dns-manager-windows.exe
+          # Linux
           - os: ubuntu-latest
             artifact_name: OVH-DNS-Manager
             asset_name: ovh-dns-manager-linux
-          - os: macos-latest
+          # Mac (Intel) - Pour les vieux Macs
+          - os: macos-13
             artifact_name: OVH-DNS-Manager
-            asset_name: ovh-dns-manager-mac
+            asset_name: ovh-dns-manager-mac-intel
+          # Mac (Apple Silicon M1/M2/M3) - NOUVEAU
+          - os: macos-14
+            artifact_name: OVH-DNS-Manager
+            asset_name: ovh-dns-manager-mac-arm64
 
     steps:
     - uses: actions/checkout@v4
