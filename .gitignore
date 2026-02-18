@@ -1,32 +1,44 @@
 # --- Security (CRITICAL) ---
-# Stores sensitive OVH API keys - NEVER commit this file to Git
 .env
+.env.*
 
 # --- Python ---
-# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
-
-# Virtual Environments (depending on what you named it)
-venv/
+*.so
+.Python
 env/
-.venv/
-
-# --- PyInstaller (Build Artifacts) ---
-# Contains the temporary files used during the build process
 build/
-# Contains the final executable (.exe)
+develop-eggs/
 dist/
-# PyInstaller spec file (generated automatically, usually safe to ignore)
-*.spec
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
 
-# --- IDE & OS Metadata ---
-# VS Code settings
+# --- Environment Management ---
+.venv/
+venv/
+ENV/
+
+# --- Tools ---
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# --- IDE & OS ---
 .vscode/
-# PyCharm settings
 .idea/
-# macOS folder metadata
 .DS_Store
-# Windows thumbnail cache
 Thumbs.db

@@ -1,0 +1,40 @@
+[project]
+name = "ovh-dns-manager"
+version = "0.1.0"
+description = "A CLI tool for managing DNS entries via OVH API"
+readme = "README.md"
+authors = [
+    { name = "Yannis Duvignau", email = "yduvignau@snapp.fr" }
+]
+requires-python = ">=3.10"
+dependencies = [
+    "ovh>=1.2.0",
+    "rich>=13.0.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+ovh-dns = "ovh_dns_manager.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+line-length = 88
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "SIM", "UP"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+    "pytest-mock>=3.15.1",
+    "ruff>=0.15.1",
+]
