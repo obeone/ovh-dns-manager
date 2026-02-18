@@ -10,59 +10,66 @@ Author: Yannis Duvignau (yduvignau@snapp.fr)
 # ========= IMPORTS ============
 import os
 import sys
+from dataclasses import dataclass
 from pathlib import Path
+
+from dotenv import load_dotenv
 from rich.console import Console
-from rich.prompt import Prompt, Confirm
 from rich.panel import Panel
+from rich.prompt import Confirm, Prompt
 
 # ========= CONSOLE SETUP ============
 console = Console()
 
 # ========= CONSTANTS ============
-if getattr(sys, 'frozen', False):
-    # Si c'est un .exe, on prend le dossier où se trouve l'exe
+if getattr(sys, "frozen", False):
+    # If frozen (e.g. PyInstaller), use the executable's directory
     APPLICATION_PATH = Path(sys.executable).parent
 else:
-    # Si c'est un script python, on prend le dossier du script
-    APPLICATION_PATH = Path(__file__).parent
+    # If script, use the script's directory
+    APPLICATION_PATH = Path(__file__).parent.parent
 
 ENV_FILE = APPLICATION_PATH / ".env"
 
 
-def save_credentials():
+@dataclass
+class OvhCredentials:
+    """Dataclass to hold OVH API credentials."""
+
+    endpoint: str
+    application_key: str
+    application_secret: str
+    consumer_key: str
+    domain: str
+
+
+def save_credentials() -> bool:
     """
     Prompt user for OVH API credentials and save them to .env file.
-    
-    This function will:
-    - Prompt for all required OVH API credentials
-    - Display the configuration (with masked secrets)
-    - Save credentials to a .env file with appropriate permissions
-    - Create or overwrite the existing .env file
-    
+
     Returns:
         bool: True if credentials were saved successfully, False otherwise
     """
-    console.print(Panel.fit(
-        "[bold cyan]OVH Credentials Manager[/bold cyan]\n"
-        "[dim]Save your OVH API credentials[/dim]",
-        border_style="cyan"
-    ))
-    
-    console.print("\n[bold yellow]📋 API Configuration[/bold yellow]")
-    console.print("[dim]Generate credentials at: https://api.ovh.com/createToken/[/dim]\n")
-    
-    # Prompt for credentials
-    endpoint = Prompt.ask(
-        "Endpoint",
-        default="ovh-eu",
-        show_default=True
+    console.print(
+        Panel.fit(
+            "[bold cyan]OVH Credentials Manager[/bold cyan]\n"
+            "[dim]Save your OVH API credentials[/dim]",
+            border_style="cyan",
+        )
     )
-    
+
+    console.print("\n[bold yellow]📋 API Configuration[/bold yellow]")
+    console.print(
+        "[dim]Generate credentials at: https://api.ovh.com/createToken/[/dim]\n"
+    )
+
+    # Prompt for credentials
+    endpoint = Prompt.ask("Endpoint", default="ovh-eu", show_default=True)
     application_key = Prompt.ask("Application Key")
     application_secret = Prompt.ask("Application Secret", password=True)
     consumer_key = Prompt.ask("Consumer Key", password=True)
     domain = Prompt.ask("Domain to manage", default="example.com")
-    
+
     # Display configuration (with masked secrets)
     console.print("\n[bold green]✓[/bold green] Configuration to save:")
     console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
@@ -70,12 +77,12 @@ def save_credentials():
     console.print(f"  • Application Secret: [dim]{'*' * len(application_secret)}[/dim]")
     console.print(f"  • Consumer Key: [dim]{'*' * len(consumer_key)}[/dim]")
     console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")
-    
+
     # Confirm save
     if not Confirm.ask("Save these credentials?", default=True):
         console.print("[yellow]ℹ[/yellow] Credentials not saved")
         return False
-    
+
     try:
         # Create .env file content
         env_content = f"""# OVH API Credentials
@@ -88,117 +95,93 @@ OVH_APPLICATION_SECRET={application_secret}
 OVH_CONSUMER_KEY={consumer_key}
 OVH_DOMAIN={domain}
 """
-        
+
         # Write to .env file
-        with open(ENV_FILE, 'w') as f:
+        with open(ENV_FILE, "w", encoding="utf-8") as f:
             f.write(env_content)
-        
+
         # Set file permissions to read/write for owner only (Unix-like systems)
-        if os.name != 'nt':  # Not Windows
+        if os.name != "nt":  # Not Windows
             os.chmod(ENV_FILE, 0o600)
-        
-        console.print(f"[bold green]✓[/bold green] Credentials saved to [cyan]{ENV_FILE}[/cyan]")
+
+        console.print(
+            f"[bold green]✓[/bold green] Credentials saved to [cyan]{ENV_FILE}[/cyan]"
+        )
         console.print("[dim]Note: Make sure .env is in your .gitignore file[/dim]\n")
-        
+
         return True
-        
+
     except Exception as e:
         console.print(f"[bold red]✗[/bold red] Failed to save credentials: {str(e)}")
         return False
 
 
-def load_credentials():
+def load_credentials() -> OvhCredentials | None:
     """
-    Load OVH API credentials from .env file.
-    
-    This function reads the .env file and extracts all required credentials.
-    If the file doesn't exist or credentials are missing, it returns None.
-    
+    Load OVH API credentials from .env file using python-dotenv.
+
     Returns:
-        tuple: (endpoint, application_key, application_secret, consumer_key, domain)
-               or None if credentials cannot be loaded
-    
-    Examples:
-        >>> creds = load_credentials()
-        >>> if creds:
-        >>>     endpoint, app_key, app_secret, cons_key, domain = creds
-        >>>     # Use credentials...
+        Optional[OvhCredentials]: Credentials object or None if cannot be loaded
     """
     if not ENV_FILE.exists():
         return None
-    
-    try:
-        # Read .env file
-        credentials = {}
-        with open(ENV_FILE, 'r') as f:
-            for line in f:
-                line = line.strip()
-                # Skip comments and empty lines
-                if not line or line.startswith('#'):
-                    continue
-                
-                # Parse key=value pairs
-                if '=' in line:
-                    key, value = line.split('=', 1)
-                    credentials[key.strip()] = value.strip()
-        
-        # Extract required fields
-        endpoint = credentials.get('OVH_ENDPOINT')
-        application_key = credentials.get('OVH_APPLICATION_KEY')
-        application_secret = credentials.get('OVH_APPLICATION_SECRET')
-        consumer_key = credentials.get('OVH_CONSUMER_KEY')
-        domain = credentials.get('OVH_DOMAIN')
-        
-        # Validate all fields are present
-        if not all([endpoint, application_key, application_secret, consumer_key, domain]):
-            console.print("[yellow]⚠[/yellow] Incomplete credentials in .env file")
-            return None
-        
-        return endpoint, application_key, application_secret, consumer_key, domain
-        
-    except Exception as e:
-        console.print(f"[bold red]✗[/bold red] Failed to load credentials: {str(e)}")
+
+    # Load from .env file
+    load_dotenv(ENV_FILE)
+
+    # Extract required fields
+    endpoint = os.getenv("OVH_ENDPOINT")
+    application_key = os.getenv("OVH_APPLICATION_KEY")
+    application_secret = os.getenv("OVH_APPLICATION_SECRET")
+    consumer_key = os.getenv("OVH_CONSUMER_KEY")
+    domain = os.getenv("OVH_DOMAIN")
+
+    # Validate all fields are present
+    if not all([endpoint, application_key, application_secret, consumer_key, domain]):
+        console.print("[yellow]⚠[/yellow] Incomplete credentials in .env file")
         return None
 
+    return OvhCredentials(
+        endpoint=endpoint,  # type: ignore
+        application_key=application_key,  # type: ignore
+        application_secret=application_secret,  # type: ignore
+        consumer_key=consumer_key,  # type: ignore
+        domain=domain,  # type: ignore
+    )
 
-def get_credentials_interactive():
+
+def get_credentials_interactive() -> OvhCredentials:
     """
     Get credentials either from .env file or by prompting the user.
-    
-    This function attempts to load credentials from the .env file first.
-    If the file doesn't exist or credentials are incomplete, it offers to:
-    - Enter credentials for this session only
-    - Save credentials for future use
-    
+
     Returns:
-        tuple: (endpoint, application_key, application_secret, consumer_key, domain)
-    
-    Examples:
-        >>> endpoint, app_key, app_secret, cons_key, domain = get_credentials_interactive()
-        >>> # Credentials are now ready to use
+        OvhCredentials: Ready to use credentials
     """
     # Try to load from .env file
     creds = load_credentials()
-    
+
     if creds:
-        endpoint, app_key, app_secret, cons_key, domain = creds
-        console.print("[bold green]✓[/bold green] Loaded credentials from [cyan].env[/cyan] file")
-        console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
-        console.print(f"  • Application Key: [cyan]{app_key}[/cyan]")
-        console.print(f"  • Application Secret: [dim]{'*' * len(app_secret)}[/dim]")
-        console.print(f"  • Consumer Key: [dim]{'*' * len(cons_key)}[/dim]")
-        console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")
+        console.print(
+            "[bold green]✓[/bold green] Loaded credentials from [cyan].env[/cyan] file"
+        )
+        console.print(f"  • Endpoint: [cyan]{creds.endpoint}[/cyan]")
+        console.print(f"  • Application Key: [cyan]{creds.application_key}[/cyan]")
+        console.print(
+            f"  • Application Secret: [dim]{'*' * len(creds.application_secret)}[/dim]"
+        )
+        console.print(f"  • Consumer Key: [dim]{'*' * len(creds.consumer_key)}[/dim]")
+        console.print(f"  • Domain: [cyan]{creds.domain}[/cyan]\n")
         return creds
-    
+
     # No saved credentials
     console.print("[yellow]ℹ[/yellow] No saved credentials found")
     console.print("\nChoose an option:")
     console.print("  1. [green]Save[/green] credentials for future use")
     console.print("  2. [yellow]Enter[/yellow] credentials for this session only")
     console.print("  3. [red]Exit[/red]\n")
-    
+
     choice = Prompt.ask("Your choice", choices=["1", "2", "3"])
-    
+
     if choice == "1":
         if save_credentials():
             # Load the newly saved credentials
@@ -207,47 +190,57 @@ def get_credentials_interactive():
                 return creds
         # If save failed, fall through to manual entry
         console.print("\n[yellow]⚠[/yellow] Falling back to manual entry\n")
-    
+
     if choice == "2":
         # Manual entry without saving
         console.print("\n[bold yellow]📋 API Configuration[/bold yellow]")
-        console.print("[dim]Generate credentials at: https://api.ovh.com/createToken/[/dim]\n")
-        
+        console.print(
+            "[dim]Generate credentials at: https://api.ovh.com/createToken/[/dim]\n"
+        )
+
         endpoint = Prompt.ask("Endpoint", default="ovh-eu", show_default=True)
         application_key = Prompt.ask("Application Key")
         application_secret = Prompt.ask("Application Secret", password=True)
         consumer_key = Prompt.ask("Consumer Key", password=True)
         domain = Prompt.ask("Domain to manage", default="example.com")
-        
+
         console.print("\n[bold green]✓[/bold green] Configuration loaded (not saved)\n")
-        
-        return endpoint, application_key, application_secret, consumer_key, domain
-    
+
+        return OvhCredentials(
+            endpoint=endpoint,
+            application_key=application_key,
+            application_secret=application_secret,
+            consumer_key=consumer_key,
+            domain=domain,
+        )
+
     # Exit
     console.print("\n[bold cyan]👋 Goodbye![/bold cyan]\n")
     sys.exit(0)
 
 
-def delete_credentials():
+def delete_credentials() -> bool:
     """
     Delete the saved credentials file.
-    
-    This function removes the .env file after user confirmation.
-    
+
     Returns:
         bool: True if credentials were deleted successfully, False otherwise
     """
     if not ENV_FILE.exists():
         console.print("[yellow]ℹ[/yellow] No saved credentials found")
         return False
-    
-    console.print(f"\n[bold red]⚠ Warning:[/bold red] This will delete your saved credentials")
+
+    console.print(
+        "\n[bold red]⚠ Warning:[/bold red] This will delete your saved credentials"
+    )
     console.print(f"File: [cyan]{ENV_FILE}[/cyan]\n")
-    
-    if not Confirm.ask("Are you sure you want to delete the credentials?", default=False):
+
+    if not Confirm.ask(
+        "Are you sure you want to delete the credentials?", default=False
+    ):
         console.print("[yellow]ℹ[/yellow] Operation cancelled")
         return False
-    
+
     try:
         ENV_FILE.unlink()
         console.print("[bold green]✓[/bold green] Credentials deleted successfully\n")
@@ -257,38 +250,40 @@ def delete_credentials():
         return False
 
 
-def main():
+def main() -> None:
     """
     Main entry point for the credentials manager CLI.
-    
-    Provides options to save, view, or delete credentials.
     """
-    console.print(Panel.fit(
-        "[bold cyan]OVH Credentials Manager[/bold cyan]\n"
-        "[dim]Manage your OVH API credentials[/dim]",
-        border_style="cyan"
-    ))
-    
+    console.print(
+        Panel.fit(
+            "[bold cyan]OVH Credentials Manager[/bold cyan]\n"
+            "[dim]Manage your OVH API credentials[/dim]",
+            border_style="cyan",
+        )
+    )
+
     console.print("\n[bold cyan]📝 Menu[/bold cyan]")
     console.print("  1. [green]Save[/green] new credentials")
     console.print("  2. [blue]View[/blue] saved credentials (masked)")
     console.print("  3. [red]Delete[/red] saved credentials")
     console.print("  4. [yellow]Exit[/yellow]\n")
-    
+
     choice = Prompt.ask("Your choice", choices=["1", "2", "3", "4"])
-    
+
     if choice == "1":
         save_credentials()
     elif choice == "2":
         creds = load_credentials()
         if creds:
-            endpoint, app_key, app_secret, cons_key, domain = creds
             console.print("\n[bold green]✓[/bold green] Saved credentials:")
-            console.print(f"  • Endpoint: [cyan]{endpoint}[/cyan]")
-            console.print(f"  • Application Key: [cyan]{app_key}[/cyan]")
-            console.print(f"  • Application Secret: [dim]{'*' * len(app_secret)}[/dim]")
-            console.print(f"  • Consumer Key: [dim]{'*' * len(cons_key)}[/dim]")
-            console.print(f"  • Domain: [cyan]{domain}[/cyan]\n")
+            console.print(f"  • Endpoint: [cyan]{creds.endpoint}[/cyan]")
+            console.print(f"  • Application Key: [cyan]{creds.application_key}[/cyan]")
+            secret_mask = "*" * len(creds.application_secret)
+            console.print(f"  • Application Secret: [dim]{secret_mask}[/dim]")
+            console.print(
+                f"  • Consumer Key: [dim]{'*' * len(creds.consumer_key)}[/dim]"
+            )
+            console.print(f"  • Domain: [cyan]{creds.domain}[/cyan]\n")
         else:
             console.print("\n[yellow]ℹ[/yellow] No saved credentials found\n")
     elif choice == "3":
