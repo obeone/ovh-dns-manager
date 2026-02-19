@@ -246,7 +246,7 @@ def get_credentials_interactive() -> OvhCredentials:
     creds = load_credentials()
 
     if creds:
-        console.print("[bold green]✓[/bold green] Loaded credentials from environment")
+        console.print("[bold green]✓[/bold green] Loaded saved credentials")
         console.print(f"  • Endpoint: [cyan]{creds.endpoint}[/cyan]")
         console.print(f"  • Application Key: [cyan]{mask_key(creds.application_key)}[/cyan]")
         console.print(f"  • Application Secret: [dim]{'*' * len(creds.application_secret)}[/dim]")
