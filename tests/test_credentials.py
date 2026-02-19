@@ -92,6 +92,87 @@ class TestLoadCredentials:
         assert creds.endpoint == "ovh-eu"
 
 
+# ========= Environment variable override ============
+
+
+class TestEnvVarOverride:
+    """Tests for per-key env var override of .env file values."""
+
+    _FULL_ENV = {
+        "OVH_ENDPOINT": "ovh-ca",
+        "OVH_APPLICATION_KEY": "env_key",
+        "OVH_APPLICATION_SECRET": "env_secret",
+        "OVH_CONSUMER_KEY": "env_consumer",
+        "OVH_DOMAIN": "env.example.com",
+    }
+
+    def test_all_from_env_vars_no_file(self, tmp_path):
+        """All credentials from environment variables, no file present."""
+        missing = tmp_path / "nonexistent.env"
+        with (
+            patch("ovh_dns_manager.credentials.ENV_FILE", missing),
+            patch.dict("os.environ", self._FULL_ENV, clear=False),
+        ):
+            creds = load_credentials()
+
+        assert creds is not None
+        assert creds.endpoint == "ovh-ca"
+        assert creds.application_key == "env_key"
+        assert creds.domain == "env.example.com"
+
+    def test_env_var_overrides_single_file_key(self, tmp_env_file):
+        """A single env var overrides the corresponding .env file value."""
+        with (
+            patch("ovh_dns_manager.credentials.ENV_FILE", tmp_env_file),
+            patch.dict("os.environ", {"OVH_DOMAIN": "override.com"}, clear=False),
+        ):
+            creds = load_credentials()
+
+        assert creds is not None
+        # OVH_DOMAIN overridden by env var
+        assert creds.domain == "override.com"
+        # Other fields still from file
+        assert creds.endpoint == "ovh-eu"
+        assert creds.application_key == "test_app_key_1234"
+
+    def test_partial_env_partial_file(self, tmp_path):
+        """Partial env vars + partial file merge into complete credentials."""
+        env_file = tmp_path / ".env"
+        env_file.write_text(
+            "OVH_ENDPOINT=ovh-eu\n"
+            "OVH_APPLICATION_KEY=file_key\n"
+            "OVH_APPLICATION_SECRET=file_secret\n"
+        )
+        env_vars = {
+            "OVH_CONSUMER_KEY": "env_consumer",
+            "OVH_DOMAIN": "merged.example.com",
+        }
+        with (
+            patch("ovh_dns_manager.credentials.ENV_FILE", env_file),
+            patch.dict("os.environ", env_vars, clear=False),
+        ):
+            creds = load_credentials()
+
+        assert creds is not None
+        assert creds.endpoint == "ovh-eu"           # from file
+        assert creds.application_key == "file_key"   # from file
+        assert creds.application_secret == "file_secret"  # from file
+        assert creds.consumer_key == "env_consumer"  # from env
+        assert creds.domain == "merged.example.com"  # from env
+
+    def test_incomplete_merge_returns_none(self, tmp_path):
+        """Partial env + partial file still missing keys returns None."""
+        env_file = tmp_path / ".env"
+        env_file.write_text("OVH_ENDPOINT=ovh-eu\n")
+        with (
+            patch("ovh_dns_manager.credentials.ENV_FILE", env_file),
+            patch.dict("os.environ", {"OVH_APPLICATION_KEY": "env_key"}, clear=False),
+        ):
+            creds = load_credentials()
+
+        assert creds is None
+
+
 # ========= Fallthrough bug fix ============
 
 
