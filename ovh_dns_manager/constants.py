@@ -8,6 +8,7 @@ Copyright (c) 2026 Snapp'
 Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -32,5 +33,9 @@ if getattr(sys, 'frozen', False):
 else:
     APPLICATION_PATH = Path(__file__).parent.parent
 
-# Path to the .env credentials file
-ENV_FILE = APPLICATION_PATH / ".env"
+# Credentials file path: ~/.config/ovh-dns-manager/credentials.env
+# Respects XDG_CONFIG_HOME if set, otherwise defaults to ~/.config
+_CONFIG_DIR = Path(
+    os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config")
+) / "ovh-dns-manager"
+ENV_FILE = _CONFIG_DIR / "credentials.env"

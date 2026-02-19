@@ -106,9 +106,9 @@ You have four options to provide your credentials to the tool:
 
 These variables can be set as **environment variables**, in a **`.env` file**, or both.
 
-#### `.env` file format
+#### Credentials file
 
-The `.env` file is stored in the project root (or next to the binary for PyInstaller builds):
+Credentials are stored in `~/.config/ovh-dns-manager/credentials.env` (respects `XDG_CONFIG_HOME` if set). The file is created automatically by the credential manager with `600` permissions.
 
 ```env
 OVH_ENDPOINT=ovh-eu
@@ -151,10 +151,9 @@ ovh-dns-credentials       # Launch the credentials manager
 
 | Concern | How it's handled |
 |---------|------------------|
-| **Storage** | Credentials are stored locally in a `.env` file — never sent anywhere except to the OVH API |
-| **File permissions** | On Unix-like systems, the `.env` file is created with `600` permissions (owner read/write only) |
+| **Storage** | Credentials are stored in `~/.config/ovh-dns-manager/credentials.env` — outside the project tree, no risk of accidental commit |
+| **File permissions** | On Unix-like systems, the credentials file is created with `600` permissions (owner read/write only) |
 | **Masked display** | Secrets are masked (`****`) whenever credentials are displayed in the terminal |
-| **Version control** | `.env` is listed in `.gitignore` — **never** commit it to Git |
 | **Session-only mode** | You can enter credentials without saving them to disk (one-time use) |
 
 ---
