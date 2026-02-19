@@ -3,6 +3,9 @@ Tests for the validation module.
 
 Covers: IP validation, record target validation, mask_key,
 domain validation, and subdomain validation.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import ipaddress

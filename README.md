@@ -1,6 +1,7 @@
 # OVH DNS Manager CLI
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 ![PyInstaller](https://img.shields.io/badge/PyInstaller-Binary-orange)
 
 A CLI tool for managing DNS entries on domains hosted at OVH, built with [Rich](https://github.com/Textualize/rich) for a beautiful interactive terminal experience.
@@ -9,7 +10,7 @@ A CLI tool for managing DNS entries on domains hosted at OVH, built with [Rich](
 flowchart TB
     User([User]) --> CLI[ovh-dns-manager CLI]
     CLI --> Creds[Credential Manager]
-    Creds --> DotEnv[.env file]
+    Creds --> CredFile[credentials.env]
     CLI --> OVH[OVH API]
     OVH --> Create[Create records]
     OVH --> List[List records]
@@ -38,19 +39,19 @@ flowchart TB
 ### Via [uv](https://docs.astral.sh/uv/) (recommended)
 
 ```bash
-uv tool install git+https://github.com/obeone/ovh-dns-manager.git
+uv tool install git+https://github.com/SnappFr/ovh-dns-manager.git
 ```
 
 ### Via pipx
 
 ```bash
-pipx install git+https://github.com/obeone/ovh-dns-manager.git
+pipx install git+https://github.com/SnappFr/ovh-dns-manager.git
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/obeone/ovh-dns-manager.git
+git clone https://github.com/SnappFr/ovh-dns-manager.git
 cd ovh-dns-manager
 uv venv && source .venv/bin/activate
 uv pip install -e .
@@ -58,9 +59,9 @@ uv pip install -e .
 
 ---
 
-## 🔑 Configuration (OVH API Token)
+## 🔑 Configuration (OVH API Credentials)
 
-To use this tool, you need to generate API credentials.
+### Step 1: Generate API tokens
 
 1. Visit the [OVH Create Token page](https://api.ovh.com/createToken/)
 2. Log in with your OVH ID
@@ -78,7 +79,82 @@ To use this tool, you need to generate API credentials.
    | `DELETE` | `/domain/zone/*` |
 
 4. Click **Create keys**
-5. Keep the **Application Key**, **Application Secret**, and **Consumer Key** handy
+5. You will receive three values: **Application Key**, **Application Secret**, and **Consumer Key**
+
+### Step 2: Store credentials
+
+You have four options to provide your credentials to the tool:
+
+| Method | How | Persistence |
+|--------|-----|-------------|
+| **Environment variables** | `export OVH_APPLICATION_KEY=...` or Docker/CI secrets | Session / container lifetime |
+| **Credential manager** (recommended for local use) | Run `ovh-dns-credentials` and choose **Save** | Saved to `credentials.env`, reused across sessions |
+| **First-run prompt** | Launch `ovh-dns-manager` without credentials — you will be prompted | Choose to save or use for this session only |
+| **Manual `credentials.env`** | Create a `credentials.env` file yourself (see format below) | Persistent |
+
+> **Resolution order:** environment variables take precedence over `credentials.env` file values. This means you can use `credentials.env` for defaults and override specific values via env vars (useful for CI/CD or Docker).
+
+#### Required variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OVH_ENDPOINT` | OVH API region endpoint | `ovh-eu`, `ovh-ca`, `ovh-us` |
+| `OVH_APPLICATION_KEY` | Application key from token creation | `a1b2c3d4e5f6` |
+| `OVH_APPLICATION_SECRET` | Application secret (keep private) | `g7h8i9j0k1l2` |
+| `OVH_CONSUMER_KEY` | Consumer key (keep private) | `m3n4o5p6q7r8` |
+| `OVH_DOMAIN` | Domain name to manage | `example.com` |
+
+These variables can be set as **environment variables**, in a **`.env` file**, or both.
+
+#### Credentials file
+
+Credentials are stored in `~/.config/ovh-dns-manager/credentials.env` (respects `XDG_CONFIG_HOME` if set). The file is created automatically by the credential manager with `600` permissions.
+
+```env
+OVH_ENDPOINT=ovh-eu
+OVH_APPLICATION_KEY=your_application_key
+OVH_APPLICATION_SECRET=your_application_secret
+OVH_CONSUMER_KEY=your_consumer_key
+OVH_DOMAIN=example.com
+```
+
+#### Docker / CI example
+
+```bash
+docker run --rm \
+  -e OVH_ENDPOINT=ovh-eu \
+  -e OVH_APPLICATION_KEY=your_key \
+  -e OVH_APPLICATION_SECRET=your_secret \
+  -e OVH_CONSUMER_KEY=your_consumer_key \
+  -e OVH_DOMAIN=example.com \
+  ovh-dns-manager
+```
+
+### Credentials Manager
+
+A dedicated CLI is provided to manage saved credentials:
+
+```bash
+ovh-dns-credentials       # Launch the credentials manager
+```
+
+| Menu option | Description |
+|-------------|-------------|
+| 1. Save | Prompt for all API keys and save to `credentials.env` |
+| 2. View | Display current configuration (secrets are masked) |
+| 3. Delete | Remove the `credentials.env` file entirely |
+| 4. Exit | Close the credentials manager |
+
+---
+
+## 🔒 Security
+
+| Concern | How it's handled |
+|---------|------------------|
+| **Storage** | Credentials are stored in `~/.config/ovh-dns-manager/credentials.env` — outside the project tree, no risk of accidental commit |
+| **File permissions** | On Unix-like systems, the credentials file is created with `600` permissions (owner read/write only) |
+| **Masked display** | Secrets are masked (`****`) whenever credentials are displayed in the terminal |
+| **Session-only mode** | You can enter credentials without saving them to disk (one-time use) |
 
 ---
 
@@ -98,27 +174,6 @@ python -m ovh_dns_manager # Alternative invocation
 | 2. List | Display all records in a formatted table |
 | 3. Delete | Remove records filtered by subdomain and type |
 | 4. Exit | Close the application |
-
-### Credentials Manager
-
-```bash
-ovh-dns-credentials       # Manage saved API credentials
-```
-
-| Menu option | Description |
-|-------------|-------------|
-| 1. Save | Prompt for API keys and save to `.env` |
-| 2. View | Show current configuration (secrets masked) |
-| 3. Delete | Remove the `.env` file |
-| 4. Exit | Close the credentials manager |
-
----
-
-## 🔒 Security Note
-
-* **Local Storage:** Credentials are stored in a `.env` file in the project root
-* **Permissions:** On Unix-like systems, file permissions are set to `600` (owner read/write only)
-* **Version Control:** **NEVER** commit your `.env` file to Git
 
 ---
 
@@ -140,4 +195,12 @@ ovh_dns_manager/
 
 ## 👤 Author
 
-Yannis Duvignau (yduvignau@snapp.fr)
+Yannis Duvignau ([@yannisduvignau](https://github.com/yannisduvignau))
+
+## 🤝 Contributors
+
+Grégoire Compagnon ([@obeone](https://github.com/obeone))
+
+---
+
+Licensed under MIT - © 2026 Snapp'

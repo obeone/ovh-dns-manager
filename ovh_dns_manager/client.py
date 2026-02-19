@@ -3,6 +3,9 @@ OVH API client creation and connection management.
 
 Provides factory functions to create an authenticated OVH API client
 with retry logic on transient network errors.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import logging
