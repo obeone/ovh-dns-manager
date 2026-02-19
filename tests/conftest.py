@@ -1,5 +1,8 @@
 """
 Shared pytest fixtures for OVH DNS Manager tests.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 from unittest.mock import MagicMock

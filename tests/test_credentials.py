@@ -2,6 +2,9 @@
 Tests for the credentials module.
 
 Covers: load/save, OvhCredentials NamedTuple, and the fallthrough bug fix.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 from pathlib import Path

@@ -2,6 +2,9 @@
 Tests for the client module.
 
 Covers: OVH client creation, connection testing, and error handling.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 from unittest.mock import MagicMock, patch

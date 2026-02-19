@@ -2,6 +2,9 @@
 Tests for the dns module.
 
 Covers: delete filtering by record type using API filters.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 from unittest.mock import patch
