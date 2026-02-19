@@ -10,7 +10,7 @@ A CLI tool for managing DNS entries on domains hosted at OVH, built with [Rich](
 flowchart TB
     User([User]) --> CLI[ovh-dns-manager CLI]
     CLI --> Creds[Credential Manager]
-    Creds --> DotEnv[.env file]
+    Creds --> CredFile[credentials.env]
     CLI --> OVH[OVH API]
     OVH --> Create[Create records]
     OVH --> List[List records]
@@ -140,9 +140,9 @@ ovh-dns-credentials       # Launch the credentials manager
 
 | Menu option | Description |
 |-------------|-------------|
-| 1. Save | Prompt for all API keys and save to `.env` |
+| 1. Save | Prompt for all API keys and save to `credentials.env` |
 | 2. View | Display current configuration (secrets are masked) |
-| 3. Delete | Remove the `.env` file entirely |
+| 3. Delete | Remove the `credentials.env` file entirely |
 | 4. Exit | Close the credentials manager |
 
 ---
