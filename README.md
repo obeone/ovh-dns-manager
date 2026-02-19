@@ -36,16 +36,16 @@ flowchart TB
 
 ## 🛠️ Installation
 
-### Via pipx (recommended)
-
-```bash
-pipx install git+https://github.com/SnappFr/ovh-dns-manager.git
-```
-
-### Via uv tool
+### Via [uv](https://docs.astral.sh/uv/) (recommended)
 
 ```bash
 uv tool install git+https://github.com/SnappFr/ovh-dns-manager.git
+```
+
+### Via pipx
+
+```bash
+pipx install git+https://github.com/SnappFr/ovh-dns-manager.git
 ```
 
 ### From source
