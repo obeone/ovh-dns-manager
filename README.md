@@ -88,11 +88,11 @@ You have four options to provide your credentials to the tool:
 | Method | How | Persistence |
 |--------|-----|-------------|
 | **Environment variables** | `export OVH_APPLICATION_KEY=...` or Docker/CI secrets | Session / container lifetime |
-| **Credential manager** (recommended for local use) | Run `ovh-dns-credentials` and choose **Save** | Saved to `.env`, reused across sessions |
+| **Credential manager** (recommended for local use) | Run `ovh-dns-credentials` and choose **Save** | Saved to `credentials.env`, reused across sessions |
 | **First-run prompt** | Launch `ovh-dns-manager` without credentials — you will be prompted | Choose to save or use for this session only |
-| **Manual `.env`** | Create a `.env` file yourself (see format below) | Persistent |
+| **Manual `credentials.env`** | Create a `credentials.env` file yourself (see format below) | Persistent |
 
-> **Resolution order:** environment variables take precedence over `.env` file values. This means you can use a `.env` for defaults and override specific values via env vars (useful for CI/CD or Docker).
+> **Resolution order:** environment variables take precedence over `credentials.env` file values. This means you can use `credentials.env` for defaults and override specific values via env vars (useful for CI/CD or Docker).
 
 #### Required variables
 
