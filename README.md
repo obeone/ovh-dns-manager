@@ -1,6 +1,7 @@
 # OVH DNS Manager CLI
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
 ![PyInstaller](https://img.shields.io/badge/PyInstaller-Binary-orange)
 
 A CLI tool for managing DNS entries on domains hosted at OVH, built with [Rich](https://github.com/Textualize/rich) for a beautiful interactive terminal experience.
@@ -38,19 +39,19 @@ flowchart TB
 ### Via pipx (recommended)
 
 ```bash
-pipx install git+https://github.com/obeone/ovh-dns-manager.git
+pipx install git+https://github.com/SnappFr/ovh-dns-manager.git
 ```
 
 ### Via uv tool
 
 ```bash
-uv tool install git+https://github.com/obeone/ovh-dns-manager.git
+uv tool install git+https://github.com/SnappFr/ovh-dns-manager.git
 ```
 
 ### From source
 
 ```bash
-git clone https://github.com/obeone/ovh-dns-manager.git
+git clone https://github.com/SnappFr/ovh-dns-manager.git
 cd ovh-dns-manager
 uv venv && source .venv/bin/activate
 uv pip install -e .
@@ -140,4 +141,12 @@ ovh_dns_manager/
 
 ## 👤 Author
 
-Yannis Duvignau (yduvignau@snapp.fr)
+Yannis Duvignau ([@yannisduvignau](https://github.com/yannisduvignau))
+
+## 🤝 Contributors
+
+Grégoire Compagnon ([@obeone](https://github.com/obeone))
+
+---
+
+Licensed under MIT - © 2026 Snapp'
