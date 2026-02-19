@@ -59,9 +59,9 @@ uv pip install -e .
 
 ---
 
-## 🔑 Configuration (OVH API Token)
+## 🔑 Configuration (OVH API Credentials)
 
-To use this tool, you need to generate API credentials.
+### Step 1: Generate API tokens
 
 1. Visit the [OVH Create Token page](https://api.ovh.com/createToken/)
 2. Log in with your OVH ID
@@ -79,7 +79,64 @@ To use this tool, you need to generate API credentials.
    | `DELETE` | `/domain/zone/*` |
 
 4. Click **Create keys**
-5. Keep the **Application Key**, **Application Secret**, and **Consumer Key** handy
+5. You will receive three values: **Application Key**, **Application Secret**, and **Consumer Key**
+
+### Step 2: Store credentials
+
+You have three options to provide your credentials to the tool:
+
+| Method | How | Persistence |
+|--------|-----|-------------|
+| **Credential manager** (recommended) | Run `ovh-dns-credentials` and choose **Save** | Saved to `.env`, reused across sessions |
+| **First-run prompt** | Launch `ovh-dns-manager` without a `.env` — you will be prompted | Choose to save or use for this session only |
+| **Manual `.env`** | Create a `.env` file yourself (see format below) | Persistent |
+
+#### `.env` file format
+
+The `.env` file is stored in the project root (or next to the binary for PyInstaller builds) and must contain:
+
+```env
+OVH_ENDPOINT=ovh-eu
+OVH_APPLICATION_KEY=your_application_key
+OVH_APPLICATION_SECRET=your_application_secret
+OVH_CONSUMER_KEY=your_consumer_key
+OVH_DOMAIN=example.com
+```
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OVH_ENDPOINT` | OVH API region endpoint | `ovh-eu`, `ovh-ca`, `ovh-us` |
+| `OVH_APPLICATION_KEY` | Application key from token creation | `a1b2c3d4e5f6` |
+| `OVH_APPLICATION_SECRET` | Application secret (keep private) | `g7h8i9j0k1l2` |
+| `OVH_CONSUMER_KEY` | Consumer key (keep private) | `m3n4o5p6q7r8` |
+| `OVH_DOMAIN` | Domain name to manage | `example.com` |
+
+### Credentials Manager
+
+A dedicated CLI is provided to manage saved credentials:
+
+```bash
+ovh-dns-credentials       # Launch the credentials manager
+```
+
+| Menu option | Description |
+|-------------|-------------|
+| 1. Save | Prompt for all API keys and save to `.env` |
+| 2. View | Display current configuration (secrets are masked) |
+| 3. Delete | Remove the `.env` file entirely |
+| 4. Exit | Close the credentials manager |
+
+---
+
+## 🔒 Security
+
+| Concern | How it's handled |
+|---------|------------------|
+| **Storage** | Credentials are stored locally in a `.env` file — never sent anywhere except to the OVH API |
+| **File permissions** | On Unix-like systems, the `.env` file is created with `600` permissions (owner read/write only) |
+| **Masked display** | Secrets are masked (`****`) whenever credentials are displayed in the terminal |
+| **Version control** | `.env` is listed in `.gitignore` — **never** commit it to Git |
+| **Session-only mode** | You can enter credentials without saving them to disk (one-time use) |
 
 ---
 
@@ -99,27 +156,6 @@ python -m ovh_dns_manager # Alternative invocation
 | 2. List | Display all records in a formatted table |
 | 3. Delete | Remove records filtered by subdomain and type |
 | 4. Exit | Close the application |
-
-### Credentials Manager
-
-```bash
-ovh-dns-credentials       # Manage saved API credentials
-```
-
-| Menu option | Description |
-|-------------|-------------|
-| 1. Save | Prompt for API keys and save to `.env` |
-| 2. View | Show current configuration (secrets masked) |
-| 3. Delete | Remove the `.env` file |
-| 4. Exit | Close the credentials manager |
-
----
-
-## 🔒 Security Note
-
-* **Local Storage:** Credentials are stored in a `.env` file in the project root
-* **Permissions:** On Unix-like systems, file permissions are set to `600` (owner read/write only)
-* **Version Control:** **NEVER** commit your `.env` file to Git
 
 ---
 
