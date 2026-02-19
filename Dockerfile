@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 FROM python:3.13-alpine
-COPY --from=ghcr.io/astral-sh/uv:0.9 /uv /uvx /bin/
+COPY --from=ghcr.io/astral-sh/uv:0.9.26@sha256:9a23023be68b2ed09750ae636228e903a54a05ea56ed03a934d00fe9fbeded4b /uv /uvx /bin/
 
 WORKDIR /app
 
