@@ -135,21 +135,61 @@ OVH_DOMAIN={domain}
         return False
 
 
+def _load_from_environment() -> Optional[OvhCredentials]:
+    """
+    Load OVH API credentials from environment variables.
+
+    Checks for OVH_ENDPOINT, OVH_APPLICATION_KEY, OVH_APPLICATION_SECRET,
+    OVH_CONSUMER_KEY, and OVH_DOMAIN in the current environment.
+
+    Returns
+    -------
+    OvhCredentials
+        If all required variables are set, None otherwise
+    """
+    endpoint = os.environ.get('OVH_ENDPOINT')
+    application_key = os.environ.get('OVH_APPLICATION_KEY')
+    application_secret = os.environ.get('OVH_APPLICATION_SECRET')
+    consumer_key = os.environ.get('OVH_CONSUMER_KEY')
+    domain = os.environ.get('OVH_DOMAIN')
+
+    if all([endpoint, application_key, application_secret, consumer_key, domain]):
+        logger.info("Loaded credentials from environment variables")
+        return OvhCredentials(
+            endpoint=endpoint,
+            application_key=application_key,
+            application_secret=application_secret,
+            consumer_key=consumer_key,
+            domain=domain,
+        )
+
+    return None
+
+
 def load_credentials() -> Optional[OvhCredentials]:
     """
-    Load OVH API credentials from .env file using python-dotenv.
+    Load OVH API credentials from environment variables or .env file.
 
-    This function reads the .env file and extracts all required credentials.
-    If the file doesn't exist or credentials are missing, it returns None.
+    Checks environment variables first (useful for Docker / CI), then
+    falls back to the .env file. If neither source has complete
+    credentials, returns None.
 
-    Returns:
-        OvhCredentials if all fields are present, None otherwise
+    Returns
+    -------
+    OvhCredentials
+        If all fields are present, None otherwise
 
-    Examples:
-        >>> creds = load_credentials()
-        >>> if creds:
-        ...     print(creds.endpoint)
+    Examples
+    --------
+    >>> creds = load_credentials()
+    >>> if creds:
+    ...     print(creds.endpoint)
     """
+    # Try environment variables first (Docker, CI)
+    env_creds = _load_from_environment()
+    if env_creds:
+        return env_creds
+
     if not ENV_FILE.exists():
         logger.debug("No .env file found at %s", ENV_FILE)
         return None
