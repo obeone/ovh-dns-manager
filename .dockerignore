@@ -1,0 +1,41 @@
+# Version control
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+.venv
+venv
+env
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+
+# Build artifacts
+build
+dist
+*.spec
+
+# IDE
+.vscode
+.idea
+
+# Environment files (contain secrets)
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Project specific
+.worktrees
+worktrees
+tests
+.github
+README.md
+Dockerfile
+.dockerignore
