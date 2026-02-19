@@ -32,5 +32,6 @@ dist/
 Thumbs.db
 # Git worktrees
 worktrees/
+.worktrees/
 # Setuptools egg info
 *.egg-info/
