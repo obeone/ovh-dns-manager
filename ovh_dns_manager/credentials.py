@@ -136,86 +136,116 @@ OVH_DOMAIN={domain}
         return False
 
 
+_CREDENTIAL_KEYS = [
+    'OVH_ENDPOINT',
+    'OVH_APPLICATION_KEY',
+    'OVH_APPLICATION_SECRET',
+    'OVH_CONSUMER_KEY',
+    'OVH_DOMAIN',
+]
+
+
 def load_credentials() -> Optional[OvhCredentials]:
     """
-    Load OVH API credentials from .env file using python-dotenv.
+    Load OVH API credentials from environment variables and/or .env file.
 
-    This function reads the .env file and extracts all required credentials.
-    If the file doesn't exist or credentials are missing, it returns None.
+    Resolution order for each variable (first non-empty wins):
+    1. Real environment variables (``os.environ``)
+    2. Values from the ``.env`` file (via ``dotenv_values``)
 
-    Returns:
-        OvhCredentials if all fields are present, None otherwise
+    This allows environment variables to override or complement .env values,
+    which is useful for Docker, CI/CD, or secret managers.
 
-    Examples:
-        >>> creds = load_credentials()
-        >>> if creds:
-        ...     print(creds.endpoint)
+    Returns
+    -------
+    OvhCredentials
+        If all five required fields are present.
+    None
+        If any field is missing after merging both sources.
+
+    Examples
+    --------
+    >>> creds = load_credentials()
+    >>> if creds:
+    ...     print(creds.endpoint)
     """
-    if not ENV_FILE.exists():
+    # Load .env file values (empty dict if file doesn't exist)
+    file_credentials: dict[str, str | None] = {}
+    if ENV_FILE.exists():
+        try:
+            file_credentials = dotenv_values(ENV_FILE)
+            logger.debug("Loaded %d keys from .env file", len(file_credentials))
+        except OSError as e:
+            console.print(f"[bold red]✗[/bold red] Failed to read .env file: {e}")
+            logger.error("Failed to read .env file: %s", e, exc_info=True)
+    else:
         logger.debug("No .env file found at %s", ENV_FILE)
-        return None
 
-    try:
-        credentials = dotenv_values(ENV_FILE)
-        logger.debug("Loaded %d keys from .env file", len(credentials))
+    # Merge: env vars take precedence over .env file
+    merged: dict[str, str | None] = {}
+    source_info: list[str] = []
+    for key in _CREDENTIAL_KEYS:
+        env_val = os.environ.get(key)
+        file_val = file_credentials.get(key)
+        if env_val:
+            merged[key] = env_val
+            source_info.append(f"{key}=env")
+        elif file_val:
+            merged[key] = file_val
+            source_info.append(f"{key}=.env")
+        else:
+            merged[key] = None
 
-        # Extract required fields
-        endpoint = credentials.get('OVH_ENDPOINT')
-        application_key = credentials.get('OVH_APPLICATION_KEY')
-        application_secret = credentials.get('OVH_APPLICATION_SECRET')
-        consumer_key = credentials.get('OVH_CONSUMER_KEY')
-        domain = credentials.get('OVH_DOMAIN')
+    logger.debug("Credential sources: %s", ", ".join(source_info) or "none")
 
-        # Validate all fields are present
-        if not all([endpoint, application_key, application_secret, consumer_key, domain]):
-            missing = [
-                k for k, v in {
-                    'OVH_ENDPOINT': endpoint,
-                    'OVH_APPLICATION_KEY': application_key,
-                    'OVH_APPLICATION_SECRET': application_secret,
-                    'OVH_CONSUMER_KEY': consumer_key,
-                    'OVH_DOMAIN': domain,
-                }.items() if not v
-            ]
-            console.print("[yellow]⚠[/yellow] Incomplete credentials in .env file")
+    # Extract required fields
+    endpoint = merged.get('OVH_ENDPOINT')
+    application_key = merged.get('OVH_APPLICATION_KEY')
+    application_secret = merged.get('OVH_APPLICATION_SECRET')
+    consumer_key = merged.get('OVH_CONSUMER_KEY')
+    domain = merged.get('OVH_DOMAIN')
+
+    # Validate all fields are present
+    if not all([endpoint, application_key, application_secret, consumer_key, domain]):
+        missing = [k for k in _CREDENTIAL_KEYS if not merged.get(k)]
+        # Only warn if at least one source had data (partial config)
+        if source_info:
+            console.print("[yellow]⚠[/yellow] Incomplete credentials")
             logger.warning("Missing credentials: %s", ', '.join(missing))
-            return None
-
-        return OvhCredentials(
-            endpoint=endpoint,
-            application_key=application_key,
-            application_secret=application_secret,
-            consumer_key=consumer_key,
-            domain=domain,
-        )
-
-    except OSError as e:
-        console.print(f"[bold red]✗[/bold red] Failed to load credentials: {e}")
-        logger.error("Failed to load credentials: %s", e, exc_info=True)
         return None
+
+    return OvhCredentials(
+        endpoint=endpoint,
+        application_key=application_key,
+        application_secret=application_secret,
+        consumer_key=consumer_key,
+        domain=domain,
+    )
 
 
 def get_credentials_interactive() -> OvhCredentials:
     """
-    Get credentials either from .env file or by prompting the user.
+    Get credentials from environment variables, .env file, or by prompting the user.
 
-    This function attempts to load credentials from the .env file first.
-    If the file doesn't exist or credentials are incomplete, it offers to:
-    - Enter credentials for this session only
-    - Save credentials for future use
+    Resolution order:
+    1. Environment variables and/or .env file (via ``load_credentials``)
+    2. Interactive prompt (save or session-only)
 
-    Returns:
-        OvhCredentials with all fields populated
+    Returns
+    -------
+    OvhCredentials
+        Populated credentials from whichever source succeeded.
 
-    Examples:
-        >>> creds = get_credentials_interactive()
-        >>> print(creds.endpoint, creds.domain)
+    Examples
+    --------
+    >>> creds = get_credentials_interactive()
+    >>> print(creds.endpoint, creds.domain)
     """
-    # Try to load from .env file
+    # Try to load from env vars / .env file
     creds = load_credentials()
 
     if creds:
-        console.print("[bold green]✓[/bold green] Loaded credentials from [cyan].env[/cyan] file")
+        console.print("[bold green]✓[/bold green] Loaded credentials from environment")
         console.print(f"  • Endpoint: [cyan]{creds.endpoint}[/cyan]")
         console.print(f"  • Application Key: [cyan]{mask_key(creds.application_key)}[/cyan]")
         console.print(f"  • Application Secret: [dim]{'*' * len(creds.application_secret)}[/dim]")

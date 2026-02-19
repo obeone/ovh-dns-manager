@@ -83,17 +83,32 @@ uv pip install -e .
 
 ### Step 2: Store credentials
 
-You have three options to provide your credentials to the tool:
+You have four options to provide your credentials to the tool:
 
 | Method | How | Persistence |
 |--------|-----|-------------|
-| **Credential manager** (recommended) | Run `ovh-dns-credentials` and choose **Save** | Saved to `.env`, reused across sessions |
-| **First-run prompt** | Launch `ovh-dns-manager` without a `.env` — you will be prompted | Choose to save or use for this session only |
+| **Environment variables** | `export OVH_APPLICATION_KEY=...` or Docker/CI secrets | Session / container lifetime |
+| **Credential manager** (recommended for local use) | Run `ovh-dns-credentials` and choose **Save** | Saved to `.env`, reused across sessions |
+| **First-run prompt** | Launch `ovh-dns-manager` without credentials — you will be prompted | Choose to save or use for this session only |
 | **Manual `.env`** | Create a `.env` file yourself (see format below) | Persistent |
+
+> **Resolution order:** environment variables take precedence over `.env` file values. This means you can use a `.env` for defaults and override specific values via env vars (useful for CI/CD or Docker).
+
+#### Required variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `OVH_ENDPOINT` | OVH API region endpoint | `ovh-eu`, `ovh-ca`, `ovh-us` |
+| `OVH_APPLICATION_KEY` | Application key from token creation | `a1b2c3d4e5f6` |
+| `OVH_APPLICATION_SECRET` | Application secret (keep private) | `g7h8i9j0k1l2` |
+| `OVH_CONSUMER_KEY` | Consumer key (keep private) | `m3n4o5p6q7r8` |
+| `OVH_DOMAIN` | Domain name to manage | `example.com` |
+
+These variables can be set as **environment variables**, in a **`.env` file**, or both.
 
 #### `.env` file format
 
-The `.env` file is stored in the project root (or next to the binary for PyInstaller builds) and must contain:
+The `.env` file is stored in the project root (or next to the binary for PyInstaller builds):
 
 ```env
 OVH_ENDPOINT=ovh-eu
@@ -103,13 +118,17 @@ OVH_CONSUMER_KEY=your_consumer_key
 OVH_DOMAIN=example.com
 ```
 
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `OVH_ENDPOINT` | OVH API region endpoint | `ovh-eu`, `ovh-ca`, `ovh-us` |
-| `OVH_APPLICATION_KEY` | Application key from token creation | `a1b2c3d4e5f6` |
-| `OVH_APPLICATION_SECRET` | Application secret (keep private) | `g7h8i9j0k1l2` |
-| `OVH_CONSUMER_KEY` | Consumer key (keep private) | `m3n4o5p6q7r8` |
-| `OVH_DOMAIN` | Domain name to manage | `example.com` |
+#### Docker / CI example
+
+```bash
+docker run --rm \
+  -e OVH_ENDPOINT=ovh-eu \
+  -e OVH_APPLICATION_KEY=your_key \
+  -e OVH_APPLICATION_SECRET=your_secret \
+  -e OVH_CONSUMER_KEY=your_consumer_key \
+  -e OVH_DOMAIN=example.com \
+  ovh-dns-manager
+```
 
 ### Credentials Manager
 
