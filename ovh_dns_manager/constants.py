@@ -3,6 +3,9 @@ Constants used throughout the OVH DNS Manager package.
 
 This module centralizes all constant values including supported DNS record
 types, validation regexes, and filesystem paths for credential storage.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import re

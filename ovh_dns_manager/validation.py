@@ -3,6 +3,9 @@ Input validation utilities for the OVH DNS Manager.
 
 Provides validation functions for domains, subdomains, DNS record targets,
 and a helper to mask sensitive API keys for display purposes.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import ipaddress

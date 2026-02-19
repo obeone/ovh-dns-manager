@@ -3,6 +3,9 @@ DNS record operations for the OVH DNS Manager.
 
 Provides functions to create, list, delete DNS records and refresh
 DNS zones through the OVH API.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import ipaddress

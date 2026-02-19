@@ -3,6 +3,9 @@ CLI entry point for the OVH DNS Manager.
 
 Provides the main application loop, argument parsing, logging setup,
 and menu display for the interactive DNS management interface.
+
+Copyright (c) 2026 Snapp'
+Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
 import argparse

@@ -4,6 +4,7 @@ OVH Credentials Manager - Securely store and retrieve OVH API credentials.
 This module provides functions to save and load OVH API credentials from a .env file,
 eliminating the need to enter them every time you run the application.
 
+Copyright (c) 2026 Snapp'
 Author: Yannis Duvignau (yduvignau@snapp.fr)
 """
 
